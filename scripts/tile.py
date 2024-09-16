@@ -1,7 +1,8 @@
 import os
 import shutil
+from multiprocessing import Manager, Process, Queue
+
 from gigapath.pipeline import tile_one_slide
-from multiprocessing import Process, Queue, Manager
 
 
 def tile(id: int, q: Queue, dest_root: str, overwrite: bool = False) -> None:
@@ -41,7 +42,6 @@ def tile(id: int, q: Queue, dest_root: str, overwrite: bool = False) -> None:
             # if exists, needs overwrite so remove existing tiles and
             # associated files before tiling
             if exists:
-
                 shutil.rmtree(tiles_dir)
                 os.remove(os.path.join(thumbnail_dir, slide_name + "_original.png"))
                 os.remove(os.path.join(thumbnail_dir, slide_name + "_roi_tiles.png"))
