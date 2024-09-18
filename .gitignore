@@ -5,3 +5,6 @@
 # data files
 data/tiles/output/
 data/tiles/thumbnails/
+
+# tile embeddings
+outputs/tile_embeddings

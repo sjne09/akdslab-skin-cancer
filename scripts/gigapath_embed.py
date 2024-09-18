@@ -50,14 +50,19 @@ def create_tile_embeds(
 
                 # inference method will move model and tiles to cuda device; model return
                 # includes tensor containing embeddings and tensor containing tile coords
-                tile_embeds.put(
-                    (
-                        dirname,
-                        run_inference_with_tile_encoder(
-                            tiles, tile_encoder_model, batch_size=128 * num_gpus
-                        ),
-                    )
+                embeds = (
+                    dirname,
+                    run_inference_with_tile_encoder(
+                        tiles, tile_encoder_model, batch_size=128 * num_gpus
+                    ),
                 )
+                tile_embeds.put(embeds)
+
+                # pickle the embeddings in case of error down the line
+                with open(
+                    f"outputs/tile_embeddings/{os.path.splitext(dirname)[0]}", "wb"
+                ) as f:
+                    pickle.dump(embeds[1], f)
 
     return tile_embeds
 
@@ -99,6 +104,7 @@ def create_slide_embeds(
         if tile_data == "DONE":
             break
         slide_name = tile_data[0]
+        print(f"running for {slide_name}", flush=True)
         tile_embeds: torch.Tensor = tile_data[1]["tile_embeds"]
         coords: torch.Tensor = tile_data[1]["coords"]
         slide_embed = run_slide_inference(
@@ -149,22 +155,26 @@ def run_slide_inference(
     slide_encoder_model.eval()
 
     # run inference
+    tile_embeds = tile_embeds.to(device)
+    coords = coords.to(device)
     with torch.cuda.amp.autocast(dtype=torch.float16):
-        slide_embeds = slide_encoder_model(
-            tile_embeds.to(device), coords.to(device), all_layer_embed=True
-        )
+        slide_embeds = slide_encoder_model(tile_embeds, coords, all_layer_embed=True)
     outputs = {
         "layer_{}_embed".format(i): slide_embeds[i].detach().cpu()
         for i in range(len(slide_embeds))
     }
     outputs["last_layer_embed"] = slide_embeds[-1].detach().cpu()
 
+    gc.collect()
+    with torch.cuda.device(device):
+        torch.cuda.empty_cache()
+
     # return only the final embedding
     return outputs["last_layer_embed"]
 
 
 def main():
-    gpus = ["0", "1", "2"]
+    gpus = ["0", "1"]
     os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(gpus)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     num_processes = len(gpus)
@@ -212,6 +222,9 @@ def main():
     # wait until the queue is empty
     for proc in procs:
         proc.join()
+
+    # convert slide embeds to regular dict to allow pickling
+    slide_embeds = dict(slide_embeds)
 
     # pickle the output embeddings
     with open("outputs/gigapath_slide_embeds.pkl", "wb") as f:
