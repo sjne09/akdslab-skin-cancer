@@ -8,6 +8,8 @@ from gigapath.pipeline import load_tile_slide_encoder, run_inference_with_tile_e
 from torch import nn
 from torch.multiprocessing import Manager, Process, Queue, set_start_method
 
+DATA_ROOT = "/opt/gpudata/skin-cancer"
+
 
 def create_tile_embeds(
     tile_encoder_model: nn.Module, tiles_dir: str, num_gpus: int
@@ -60,7 +62,11 @@ def create_tile_embeds(
 
                 # pickle the embeddings in case of error down the line
                 with open(
-                    f"outputs/tile_embeddings/{os.path.splitext(dirname)[0]}", "wb"
+                    os.path.join(
+                        DATA_ROOT,
+                        f"outputs/tile_embeddings/{os.path.splitext(dirname)[0]}.pkl",
+                    ),
+                    "wb",
                 ) as f:
                     pickle.dump(embeds[1], f)
 
@@ -193,7 +199,9 @@ def main():
     print("---")
 
     # get tile embeddings in job queue
-    tile_embeds = create_tile_embeds(tile_enc, "data/tiles/output", num_processes)
+    tile_embeds = create_tile_embeds(
+        tile_enc, os.path.join(DATA_ROOT, "data/tiles/output"), num_processes
+    )
     print("---")
 
     # remove tile encoder from device to free memory
@@ -227,7 +235,7 @@ def main():
     slide_embeds = dict(slide_embeds)
 
     # pickle the output embeddings
-    with open("outputs/gigapath_slide_embeds.pkl", "wb") as f:
+    with open(os.path.join(DATA_ROOT, "outputs/gigapath_slide_embeds.pkl"), "wb") as f:
         pickle.dump(slide_embeds, f)
 
 
