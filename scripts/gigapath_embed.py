@@ -4,7 +4,10 @@ import pickle
 from typing import Dict, List, Tuple
 
 import torch
-from gigapath.pipeline import load_tile_slide_encoder, run_inference_with_tile_encoder
+from gigapath.pipeline import (
+    load_tile_slide_encoder,
+    run_inference_with_tile_encoder,
+)
 from torch import nn
 from torch.multiprocessing import Manager, Process, Queue, set_start_method
 
@@ -33,8 +36,8 @@ def create_tile_embeds(
     -------
     torch.multiprocessing.Queue[Tuple[str, Dict[str, torch.Tensor]]]
         A job queue containing tuples of the slide names and a dict containing
-        tile encoder outputs with key 'tile_embeds' and tile coordinates with key
-        'coords'
+        tile encoder outputs with key 'tile_embeds' and tile coordinates with
+        key 'coords'
     """
     m = Manager()
     tile_embeds: Queue[Tuple[str, Dict[str, torch.Tensor]]] = m.Queue()
@@ -50,8 +53,9 @@ def create_tile_embeds(
             if len(tiles) > 0:
                 print(f"running for {dpath} with {len(tiles)} tiles")
 
-                # inference method will move model and tiles to cuda device; model return
-                # includes tensor containing embeddings and tensor containing tile coords
+                # inference method will move model and tiles to cuda device;
+                # model return includes tensor containing embeddings and
+                # tensor containing tile coords
                 embeds = (
                     dirname,
                     run_inference_with_tile_encoder(
@@ -64,7 +68,9 @@ def create_tile_embeds(
                 with open(
                     os.path.join(
                         DATA_ROOT,
-                        f"outputs/tile_embeddings/{os.path.splitext(dirname)[0]}.pkl",
+                        "outputs/tile_embeddings/{name}.pkl".format(
+                            name=os.path.splitext(dirname)[0]
+                        ),
                     ),
                     "wb",
                 ) as f:
@@ -82,8 +88,8 @@ def create_slide_embeds(
 ) -> None:
     """
     Create the slide embeddings by removing jobs from the queue and running
-    inference on each slide individually. Running one slide at a time is necessary
-    due to tiles per slide being heterogeneous.
+    inference on each slide individually. Running one slide at a time is
+    necessary due to tiles per slide being heterogeneous.
 
     Parameters
     ----------
@@ -92,12 +98,12 @@ def create_slide_embeds(
 
     q : torch.multiprocessing.Queue[Tuple[str, Dict[str, torch.Tensor]]]
         A job queue containing tuples of the slide names and a dict containing
-        tile encoder outputs with key 'tile_embeds' and tile coordinates with key
-        'coords'
+        tile encoder outputs with key 'tile_embeds' and tile coordinates with
+        key 'coords'
 
     outputs : Dict[str, torch.Tensor]
-        A shared dict between worker processes to add slide embeddings to. Keys are
-        slide names and values are the embedding tensors
+        A shared dict between worker processes to add slide embeddings to.
+        Keys are slide names and values are the embedding tensors
 
     device : torch.device
         The device to use
@@ -133,13 +139,14 @@ def run_slide_inference(
     Parameters
     ----------
     tile_embeds : torch.Tensor
-        The tile embeddings; shape (N, H) or (B, N, H) where N is the number of
-        tiles for the slide, H is the embedding dims, and B is the batch size
+        The tile embeddings; shape (N, H) or (B, N, H) where N is the number
+        of tiles for the slide, H is the embedding dims, and B is the batch
+        size
 
     coords : torch.Tensor
         The slide coords corresponding to the tile embeddings; shape (N, 2) or
-        (B, N, 2) where N is the number of tiles for the slide, and B is the batch
-        size
+        (B, N, 2) where N is the number of tiles for the slide, and B is the
+        batch size
 
     device : torch.device
         The device to use
@@ -164,7 +171,9 @@ def run_slide_inference(
     tile_embeds = tile_embeds.to(device)
     coords = coords.to(device)
     with torch.cuda.amp.autocast(dtype=torch.float16):
-        slide_embeds = slide_encoder_model(tile_embeds, coords, all_layer_embed=True)
+        slide_embeds = slide_encoder_model(
+            tile_embeds, coords, all_layer_embed=True
+        )
     outputs = {
         "layer_{}_embed".format(i): slide_embeds[i].detach().cpu()
         for i in range(len(slide_embeds))
@@ -218,7 +227,9 @@ def main():
     m = Manager()
     slide_embeds: Dict[str, torch.Tensor] = m.dict()
     for i, gpu in enumerate(gpus):
-        device = torch.device("cuda:" + gpu if torch.cuda.is_available() else "cpu")
+        device = torch.device(
+            "cuda:" + gpu if torch.cuda.is_available() else "cpu"
+        )
         print(f"using device {device}")
         proc = Process(
             target=create_slide_embeds,
@@ -235,7 +246,9 @@ def main():
     slide_embeds = dict(slide_embeds)
 
     # pickle the output embeddings
-    with open(os.path.join(DATA_ROOT, "outputs/gigapath_slide_embeds.pkl"), "wb") as f:
+    with open(
+        os.path.join(DATA_ROOT, "outputs/gigapath_slide_embeds.pkl"), "wb"
+    ) as f:
         pickle.dump(slide_embeds, f)
 
 

@@ -11,7 +11,9 @@ NUM_FOLDS = 5
 df = pd.read_csv(os.path.join(DATA_ROOT, "data/labels/labels.csv"))
 df["specimenid"] = df["specimenid"].astype("string")
 df["patientid"] = df["patientid"].astype("string")
-df["label"] = pd.from_dummies(df[["bcc1", "scc1", "bowens1"]], default_category="na")
+df["label"] = pd.from_dummies(
+    df[["bcc1", "scc1", "bowens1"]], default_category="na"
+)
 
 # map patient ids to specimen ids
 pat_to_specs = {k: set() for k in df["patientid"].unique()}
@@ -29,14 +31,21 @@ for slide in os.listdir(os.path.join(DATA_ROOT, "data/tiles/output")):
 print(f"specimens that will not be used due to missing labels: {unmatched}")
 
 # create dataframe mapping patient ids to the mode of the label column
-# necessary since patients may have multiple specimens, each with different labels
+# necessary since patients may have multiple specimens, each with different
+# labels
 labels_by_patient = (
-    df.groupby("patientid")["label"].agg(lambda x: pd.Series.mode(x)[0]).to_frame()
+    df.groupby("patientid")["label"]
+    .agg(lambda x: pd.Series.mode(x)[0])
+    .to_frame()
 )
 
-# merge new dataframe with existing to add overall patient label as mode across specs
+# merge new dataframe with existing to add overall patient label as mode
+# across specs
 df = df.merge(
-    labels_by_patient, left_on="patientid", right_index=True, suffixes=("_spec", "_pat")
+    labels_by_patient,
+    left_on="patientid",
+    right_index=True,
+    suffixes=("_spec", "_pat"),
 )
 
 
@@ -53,9 +62,9 @@ for name, indices in groups.groups.items():
     group_patients = group_data["patientid"].unique()
     group_folds = np.array_split(group_patients, NUM_FOLDS)
 
-    # create random assignment order for group folds; necessary since last fold will
-    # always have less than the other folds if len(group_patients) is not divisible
-    # by NUM_FOLDS
+    # create random assignment order for group folds; necessary since last
+    # fold will always have less than the other folds if len(group_patients)
+    # is not divisible by NUM_FOLDS
     assignment_order = np.arange(NUM_FOLDS)
     np.random.shuffle(assignment_order)
 
