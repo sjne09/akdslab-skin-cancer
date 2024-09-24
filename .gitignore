@@ -1,10 +1,5 @@
-# image files
-*.png
-*.svs
-
 # data files
-data/tiles/output/
-data/tiles/thumbnails/
+data
 
 # tile embeddings
 outputs/tile_embeddings
