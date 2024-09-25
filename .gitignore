@@ -1,3 +1,7 @@
+*.pyc
+*.pyo
+.vscode
+
 # data files
 data
 
