@@ -45,8 +45,12 @@ def tile(id: int, q: Queue, dest_root: str, overwrite: bool = False) -> None:
             # associated files before tiling
             if exists:
                 shutil.rmtree(tiles_dir)
-                os.remove(os.path.join(thumbnail_dir, slide_name + "_original.png"))
-                os.remove(os.path.join(thumbnail_dir, slide_name + "_roi_tiles.png"))
+                os.remove(
+                    os.path.join(thumbnail_dir, slide_name + "_original.png")
+                )
+                os.remove(
+                    os.path.join(thumbnail_dir, slide_name + "_roi_tiles.png")
+                )
                 os.remove(os.path.join(thumbnail_dir, slide_name + "roi.png"))
 
             # then tile the slide
@@ -62,7 +66,9 @@ def main():
     the queue.
     """
     m = Manager()
-    q = m.Queue()  # not a joinablequeue to avoid processes being killed prematurely
+    q = (
+        m.Queue()
+    )  # not a joinablequeue to avoid processes being killed prematurely
     num_threads = 12
 
     src_root = os.path.join(DATA_ROOT, "data/slides")

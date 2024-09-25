@@ -1,13 +1,13 @@
 import os
-from dotenv import load_dotenv
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import seaborn as sns
+from dotenv import load_dotenv
 from umap import UMAP
 
-from utils.load_data import load_data
 from utils.Label import Label
+from utils.load_data import load_data
 
 load_dotenv()
 
@@ -53,7 +53,7 @@ def cluster_embeds(
     reducer = UMAP(n_neighbors=n_neighbors, min_dist=min_dist)
 
     emb = reducer.fit_transform(df["embedding"].to_list())
-    scatter = plt.scatter(
+    plt.scatter(
         emb[:, 0],
         emb[:, 1],
         c=[sns.color_palette()[x] for x in df["label"]],
@@ -83,7 +83,11 @@ def cluster_embeds(
 
 if __name__ == "__main__":
     label_path = os.path.join(DATA_DIR, "labels/labels.csv")
-    embedding_path = os.path.join(OUTPUT_DIR, "gigapath_slide_embeds_pool.pkl")
+    embedding_path = os.path.join(OUTPUT_DIR, "gigapath_slide_embeds_cls.pkl")
     cluster_embeds(
-        embedding_path, label_path, "gigapath", "outputs/gigapath_proj.png", 50
+        embedding_path,
+        label_path,
+        "gigapath",
+        "outputs/gigapath/cls/gigapath_proj.png",
+        50,
     )
