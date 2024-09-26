@@ -1,0 +1,173 @@
+**Specimen-level Characteristics by Fold**
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>fold</th>
+      <th>n</th>
+      <th>bowens</th>
+      <th>bcc</th>
+      <th>scc</th>
+      <th>cancerous</th>
+      <th>non_cancerous</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>104</td>
+      <td>0.288462</td>
+      <td>0.201923</td>
+      <td>0.067308</td>
+      <td>0.557692</td>
+      <td>0.442308</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>105</td>
+      <td>0.323810</td>
+      <td>0.200000</td>
+      <td>0.076190</td>
+      <td>0.600000</td>
+      <td>0.400000</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>107</td>
+      <td>0.289720</td>
+      <td>0.233645</td>
+      <td>0.056075</td>
+      <td>0.579439</td>
+      <td>0.420561</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>126</td>
+      <td>0.317460</td>
+      <td>0.222222</td>
+      <td>0.071429</td>
+      <td>0.611111</td>
+      <td>0.388889</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>111</td>
+      <td>0.324324</td>
+      <td>0.189189</td>
+      <td>0.063063</td>
+      <td>0.576577</td>
+      <td>0.423423</td>
+    </tr>
+    <tr>
+      <th>Agg</th>
+      <th>553</th>
+      <th>0.309222</th>
+      <th>0.209765</th>
+      <th>0.066908</th>
+      <th>0.585895</th>
+      <th>0.414105</th>
+    </tr>
+  </tbody>
+</table>
+</div>
+<br>
+
+**Patient-level Characteristics by Fold**  
+*Note: Assumes mode of labels if a patient has multiple labels across specimens**
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>fold</th>
+      <th>n</th>
+      <th>bowens</th>
+      <th>bcc</th>
+      <th>scc</th>
+      <th>cancerous</th>
+      <th>non_cancerous</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>91</td>
+      <td>0.274725</td>
+      <td>0.186813</td>
+      <td>0.043956</td>
+      <td>0.505495</td>
+      <td>0.494505</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>90</td>
+      <td>0.300000</td>
+      <td>0.188889</td>
+      <td>0.044444</td>
+      <td>0.533333</td>
+      <td>0.466667</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>92</td>
+      <td>0.304348</td>
+      <td>0.206522</td>
+      <td>0.043478</td>
+      <td>0.554348</td>
+      <td>0.445652</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>91</td>
+      <td>0.351648</td>
+      <td>0.164835</td>
+      <td>0.043956</td>
+      <td>0.560440</td>
+      <td>0.439560</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>91</td>
+      <td>0.307692</td>
+      <td>0.186813</td>
+      <td>0.043956</td>
+      <td>0.538462</td>
+      <td>0.461538</td>
+    </tr>
+    <tr>
+      <th>Agg</th>
+      <th>455</th>
+      <th>0.307692</th>
+      <th>0.186813</th>
+      <th>0.043956</th>
+      <th>0.538462</th>
+      <th>0.461538</th>
+    </tr>
+  </tbody>
+</table>
+</div>
