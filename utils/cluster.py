@@ -4,10 +4,9 @@ import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import seaborn as sns
 from dotenv import load_dotenv
+from Label import Label
+from load_data import load_data
 from umap import UMAP
-
-from utils.Label import Label
-from utils.load_data import load_data
 
 load_dotenv()
 
@@ -83,11 +82,13 @@ def cluster_embeds(
 
 if __name__ == "__main__":
     label_path = os.path.join(DATA_DIR, "labels/labels.csv")
-    embedding_path = os.path.join(OUTPUT_DIR, "gigapath_slide_embeds_cls.pkl")
+    embedding_path = os.path.join(
+        OUTPUT_DIR, "uni/uni_pooled_slide_embeds.pkl"
+    )
     cluster_embeds(
         embedding_path,
         label_path,
-        "gigapath",
-        "outputs/gigapath/cls/gigapath_proj.png",
+        "UNI",
+        "outputs/uni/global_pooling/uni_proj.png",
         50,
     )

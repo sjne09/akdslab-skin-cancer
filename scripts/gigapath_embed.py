@@ -4,6 +4,7 @@ import pickle
 from typing import Dict, List, Tuple
 
 import torch
+from dotenv import load_dotenv
 from gigapath.pipeline import (
     load_tile_slide_encoder,
     run_inference_with_tile_encoder,
@@ -11,7 +12,9 @@ from gigapath.pipeline import (
 from torch import nn
 from torch.multiprocessing import Manager, Process, Queue, set_start_method
 
-DATA_ROOT = "/opt/gpudata/skin-cancer"
+load_dotenv()
+DATA_DIR = os.getenv("DATA_DIR")
+OUTPUT_DIR = os.getenv("OUTPUT_DIR")
 
 
 def create_tile_embeds(
@@ -67,8 +70,8 @@ def create_tile_embeds(
                 # pickle the embeddings in case of error down the line
                 with open(
                     os.path.join(
-                        DATA_ROOT,
-                        "outputs/tile_embeddings/{name}.pkl".format(
+                        OUTPUT_DIR,
+                        "tile_embeddings/{name}.pkl".format(
                             name=os.path.splitext(dirname)[0]
                         ),
                     ),
@@ -170,7 +173,7 @@ def run_slide_inference(
     # run inference
     tile_embeds = tile_embeds.to(device)
     coords = coords.to(device)
-    with torch.cuda.amp.autocast(dtype=torch.float16):
+    with torch.autocast("cuda", dtype=torch.float16):
         slide_embeds = slide_encoder_model(
             tile_embeds, coords, all_layer_embed=True
         )
@@ -209,7 +212,7 @@ def main():
 
     # get tile embeddings in job queue
     tile_embeds = create_tile_embeds(
-        tile_enc, os.path.join(DATA_ROOT, "data/tiles/output"), num_processes
+        tile_enc, os.path.join(DATA_DIR, "tiles/output"), num_processes
     )
     print("---")
 
@@ -247,7 +250,7 @@ def main():
 
     # pickle the output embeddings
     with open(
-        os.path.join(DATA_ROOT, "outputs/gigapath_slide_embeds.pkl"), "wb"
+        os.path.join(OUTPUT_DIR, "gigapath_slide_embeds.pkl"), "wb"
     ) as f:
         pickle.dump(slide_embeds, f)
 
