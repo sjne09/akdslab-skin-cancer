@@ -69,11 +69,11 @@ class AggregatorAttention(nn.Module):
         k = self.gelu(self.w_k(x))  # (B, S, d_k)
         v = self.gelu(self.w_v(k))  # (B, S, d_v)
 
-        att = torch.matmul(self.q, k.transpose(-2, -1))  # (B, 1, S)
+        att = torch.matmul(self.q, k.transpose(-2, -1))  # (B, S)
         att *= 1.0 / self.scaler
         att = F.softmax(att, dim=-1)
 
-        y = torch.matmul(att, v)  # (B, 1, d_v)
+        y = torch.matmul(att.unsqueeze(1), v).squeeze(1)  # (B, d_v)
         return y
 
 
@@ -167,9 +167,8 @@ class AgataAggregator(nn.Module):
         Returns
         -------
         torch.Tensor
-            The output of the attention layer, shape (B, 1, d_out)
+            The output, shape (B, d_out)
         """
         x = self.attn(x)
         x = self.mlp(x)
-        x = F.softmax(x)
         return x

@@ -4,9 +4,10 @@ import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import seaborn as sns
 from dotenv import load_dotenv
-from Label import Label
 from load_data import load_data
 from umap import UMAP
+
+from data_models.Label import Label
 
 load_dotenv()
 
