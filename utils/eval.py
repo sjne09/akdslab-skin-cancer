@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -189,3 +189,46 @@ def create_mean_curve(
     )
 
     ax.legend(loc="lower right")
+
+
+def get_spec_level_probs(
+    slide_indices: List[str], probs: np.ndarray
+) -> Tuple[List[str], np.ndarray]:
+    """
+    Calculates the average model output probabilities for each class
+    at the specimen level rather than slide level.
+
+    Parameters
+    ----------
+    slide_indices : List[str]
+        A list of slide ids for which the specimen is the first 6 chars
+
+    probs : np.ndarray
+        Classifier output probabilities for each slide included in
+        slide_indices; shape (N, O) where N is the number of slides
+        and O is the number of classes
+
+    Returns
+    -------
+    List[str]
+        The specimen ids
+
+    np.ndarray
+        The average probabilities for each specimen; shape (M, O) where
+        M is the number of specimens and O is the number of classes
+    """
+    combined_probs = {}
+    for j, slide_idx in enumerate(slide_indices):
+        spec = slide_idx[:6]
+        if combined_probs.get(spec) is None:
+            combined_probs[spec] = [probs[j]]
+        else:
+            combined_probs[spec].append(probs[j])
+
+    for k in combined_probs.keys():
+        combined_probs[k] = np.array(combined_probs[k])
+        combined_probs[k] = (
+            combined_probs[k].sum(axis=0) / combined_probs[k].shape[0]
+        )
+
+    return list(combined_probs.keys()), np.array(list(combined_probs.values()))

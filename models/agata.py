@@ -4,6 +4,8 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+from .MLP import MLP
+
 """
 Implements the Agata Aggregator model as used in Virchow for generating
 specimen-level predictions (https://arxiv.org/pdf/2309.07778).
@@ -21,21 +23,21 @@ class AggregatorAttention(nn.Module):
 
     def __init__(
         self,
-        in_features: int,
-        dim_k: int = 256,
-        dim_v: int = 512,
+        embed_dim: int,
+        kdim: int = 256,
+        vdim: int = 512,
         scaling: bool = False,
     ) -> None:
         """
         Parameters
         ----------
-        in_features : int
+        embed_dim : int
             The number of features in the input
 
-        dim_k : int
+        kdim : int
             The dimension of the key parameter
 
-        v_features : int
+        vdim : int
             The dimension of the value parameter
 
         scaling : bool
@@ -43,14 +45,18 @@ class AggregatorAttention(nn.Module):
         """
         super().__init__()
         self.gelu = nn.GELU()
-        self.scaler = math.sqrt(dim_k) if scaling else 1.0
+        self.scaler = math.sqrt(kdim) if scaling else 1.0
 
         self.w_k = nn.Linear(
-            in_features=in_features, out_features=dim_k, bias=True
+            in_features=embed_dim, out_features=kdim, bias=True
         )
-        self.w_v = nn.Linear(in_features=dim_k, out_features=dim_v, bias=True)
-        w_q = torch.empty((dim_k))
-        self.q = nn.Parameter(torch.nn.init.uniform_(w_q), requires_grad=True)
+        self.w_v = nn.Linear(in_features=kdim, out_features=vdim, bias=True)
+        self.q = nn.Parameter(
+            torch.nn.init.xavier_uniform_(torch.empty(1, kdim)).reshape(
+                (kdim,)
+            ),
+            requires_grad=True,
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -77,45 +83,6 @@ class AggregatorAttention(nn.Module):
         return y
 
 
-class MLP(nn.Module):
-    """
-    Basic MLP with one hidden layer using the GELU nonlinearity.
-    """
-
-    def __init__(self, in_features: int, out_features: int) -> None:
-        """
-        Parameters
-        ----------
-        in_features : int
-            The number of features in the input
-
-        out_features : int
-            The number of features in the output
-        """
-        super().__init__()
-        self.fc_h = nn.Linear(in_features, in_features)
-        self.gelu = nn.GELU()
-        self.fc_o = nn.Linear(in_features, out_features)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Performs a forward pass.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input data, shape (B, S, d_in)
-
-        Returns
-        -------
-        torch.Tensor
-            The output, shape (B, S, d_out)
-        """
-        x = self.gelu(self.fc_h(x))
-        x = self.gelu(self.fc_o(x))
-        return x
-
-
 class AgataAggregator(nn.Module):
     """
     Modified from the architecture shown in Virchow to have only a single
@@ -125,25 +92,25 @@ class AgataAggregator(nn.Module):
 
     def __init__(
         self,
-        in_features: int,
+        embed_dim: int,
         out_features: int,
-        dim_k: int,
-        dim_v: int,
+        kdim: int,
+        vdim: int,
         scaling: bool,
     ) -> None:
         """
         Parameters
         ----------
-        in_features : int
+        embed_dim : int
             The number of features in the input
 
         out_features : int
             The number of features in the output
 
-        dim_k : int
+        kdim : int
             The dimension of the key parameter
 
-        v_features : int
+        vdim : int
             The dimension of the value parameter
 
         scaling : bool
@@ -151,9 +118,13 @@ class AgataAggregator(nn.Module):
         """
         super().__init__()
         self.attn = AggregatorAttention(
-            in_features, dim_k=dim_k, dim_v=dim_v, scaling=scaling
+            embed_dim, kdim=kdim, vdim=vdim, scaling=scaling
         )
-        self.mlp = MLP(in_features=dim_v, out_features=out_features)
+        self.mlp = MLP(
+            in_features=vdim,
+            hidden_dims=[vdim, vdim // 2, vdim // 4],
+            out_features=out_features,
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
