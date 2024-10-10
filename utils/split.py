@@ -61,28 +61,36 @@ def train_val_split(
 
 
 def train_val_split_slides(
-    val_fold: int, spec_folds: List[List[str]], specs: Dict[str, List[str]]
+    val_fold: int,
+    specimens_by_fold: List[List[str]],
+    slides_by_specimen: Dict[str, List[str]],
 ) -> Tuple[List[str], List[str]]:
-    val = [slide for spec in spec_folds[val_fold] for slide in specs[spec]]
+    val = [
+        slide
+        for spec in specimens_by_fold[val_fold]
+        for slide in slides_by_specimen[spec]
+    ]
     train = [
         slide
-        for i, fold in enumerate(spec_folds)
+        for i, fold in enumerate(specimens_by_fold)
         for spec in fold
-        for slide in specs[spec]
+        for slide in slides_by_specimen[spec]
         if i != val_fold
     ]
     return train, val
 
 
 def train_val_split_labels(
-    val_fold: int, data: pd.DataFrame, spec_folds: List[List[str]]
+    val_fold: int,
+    labels_by_specimen: Dict[str, int],
+    specimens_by_fold: List[List[str]],
 ) -> Tuple[Dict[str, int], Dict[str, int]]:
     val_labels = {
-        spec: int(data.loc[spec]["label"]) for spec in spec_folds[val_fold]
+        spec: labels_by_specimen[spec] for spec in specimens_by_fold[val_fold]
     }
     train_labels = {
-        spec: int(data.loc[spec]["label"])
-        for i, fold in enumerate(spec_folds)
+        spec: labels_by_specimen[spec]
+        for i, fold in enumerate(specimens_by_fold)
         for spec in fold
         if i != val_fold
     }

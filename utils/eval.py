@@ -92,7 +92,7 @@ def plot_eval(
     curve = config["curve_display"].from_predictions(
         onehot_labels,
         probs,
-        name=f"{type} fold {fold_idx}",
+        name=f"{plot_type} fold {fold_idx}",
         plot_chance_level=plot_chance_level,
         ax=ax,
         alpha=0.3,
@@ -154,7 +154,7 @@ def create_mean_curve(
     ax.set(
         xlabel=config["xlabel"],
         ylabel=config["ylabel"],
-        title=config["tile"].format(class_name=class_name),
+        title=config["title"].format(class_name=class_name),
     )
 
     # prep plot data
@@ -170,7 +170,7 @@ def create_mean_curve(
         mean_y,
         color="b",
         label=r"Mean %s (%s = %0.2f $\pm$ %0.2f)"
-        % (type, auc_label, mean_auc, std_auc),
+        % (plot_type, auc_label, mean_auc, std_auc),
         lw=2,
         alpha=0.8,
     )
