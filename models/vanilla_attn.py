@@ -5,12 +5,13 @@ from .MLP import MLP
 from .pos_embedding import PositionalEmbedding
 
 
-class AttentionAggregator(nn.Module):
+class VanillaAttentionAggregator(nn.Module):
     def __init__(
         self,
         embed_dim: int,
         out_features: int,
         num_heads: int,
+        global_pooling: bool = False,
     ) -> None:
         """
         Uses CLS token mechanism from ViT.
@@ -27,20 +28,13 @@ class AttentionAggregator(nn.Module):
             The number of attention heads
         """
         super().__init__()
-        # self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+        self.global_pooling = global_pooling
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos = PositionalEmbedding(embed_dim)
         self.attn = nn.MultiheadAttention(
             embed_dim=embed_dim,
             num_heads=num_heads,
             batch_first=True,
-        )
-        # aggregator is a 1D "query" tensor, to be multiplied with the attn
-        # output (in this case, attn produces the "key" tensor)
-        self.aggregator = nn.Parameter(
-            torch.nn.init.xavier_uniform_(torch.empty(1, embed_dim)).reshape(
-                (embed_dim,)
-            ),
-            requires_grad=True,
         )
         self.mlp = MLP(
             in_features=embed_dim,
@@ -65,15 +59,21 @@ class AttentionAggregator(nn.Module):
         torch.Tensor
             The output, shape (B, d_out)
         """
-        # add position embeddings
+        B, S, D = x.shape
+
+        # add position embeddings prior to concating CLS token
         x = x + self.pos(coords)  # (B, S, d_embed)
 
-        att, _ = self.attn(x, x, x)  # (B, S, d_embed)
-        att = torch.matmul(self.aggregator, att.transpose(-2, -1))  # (B, S)
+        # concat CLS tokens with x
+        cls_tokens = self.cls_token.expand(B, -1, -1)
+        x = torch.cat((cls_tokens, x), dim=1)  # (B, S+1, d_embed)
 
-        # remove the sequence length dimension in favor of the embedding dim
-        # input x is treated as the "value" tensor on attention outputs
-        x = torch.matmul(att.unsqueeze(1), x).squeeze(1)  # (B, d_embed)
+        att, _ = self.attn(x, x, x)  # (B, S+1, d_embed)
+
+        if self.global_pooling:
+            x = att[:, 1:, :].mean(dim=1)  # (B, d_embed)
+        else:
+            x = att[:, 0, :]  # (B, d_embed)
 
         x = self.mlp(x)
         return x
