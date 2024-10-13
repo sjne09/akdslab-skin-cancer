@@ -45,7 +45,7 @@ class MILAttention(nn.Module):
         # get attention scores
         att: torch.Tensor = self.attn(x)  # (B, S, num_heads)
         att = att.transpose(-1, -2)  # (B, num_heads, S)
-        att = att.softmax(1)
+        att = att.softmax(-1)
 
         # get output z by taking a weighted average of the instances in x
         # with weights = attention scores
@@ -68,6 +68,7 @@ class GatedMILAttention(nn.Module):
         num_heads : int
             The number of attention heads
         """
+        super().__init__()
         self.tanh = nn.Tanh()
         self.V = nn.Linear(embed_dim, 128)
 
@@ -99,7 +100,7 @@ class GatedMILAttention(nn.Module):
         att = att_V * att_U
         att = self.w(att)  # (B, S, num_heads)
         att = att.transpose(-1, -2)  # (B, num_heads, S)
-        att = att.softmax(1)
+        att = att.softmax(-1)
 
         # get output z by taking a weighted average of the instances in x
         # with weights = attention scores
