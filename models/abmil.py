@@ -5,11 +5,7 @@ from torch import nn
 
 
 class MILAttention(nn.Module):
-    def __init__(
-        self,
-        embed_dim: int,
-        num_heads: int,
-    ) -> None:
+    def __init__(self, embed_dim: int, num_heads: int) -> None:
         """
         Attention-based MIL
         https://arxiv.org/pdf/1802.04712.
@@ -36,24 +32,24 @@ class MILAttention(nn.Module):
         Parameters
         ----------
         x : torch.Tensor
-            Input data, shape (N, embed_dim)
+            Input data, shape (B, S, embed_dim)
 
         Returns
         -------
         torch.Tensor
-            The output, shape (num_heads, embed_dim)
+            The output, shape (B, num_heads, embed_dim)
 
         torch.Tensor
-            Attention weights, shape (num_heads, N)
+            Attention weights, shape (B, num_heads, S)
         """
         # get attention scores
-        att: torch.Tensor = self.attn(x)  # (N, num_heads)
-        att = att.transpose(1, 0)  # (num_heads, N)
+        att: torch.Tensor = self.attn(x)  # (B, S, num_heads)
+        att = att.transpose(-1, -2)  # (B, num_heads, S)
         att = att.softmax(1)
 
         # get output z by taking a weighted average of the instances in x
         # with weights = attention scores
-        z = att @ x  # (num_heads, embed_dim)
+        z = att @ x  # (B, num_heads, embed_dim)
 
         return z, att
 
@@ -87,26 +83,26 @@ class GatedMILAttention(nn.Module):
         Parameters
         ----------
         x : torch.Tensor
-            Input data, shape (N, embed_dim)
+            Input data, shape (B, S, embed_dim)
 
         Returns
         -------
         torch.Tensor
-            The output, shape (num_heads, embed_dim)
+            The output, shape (B, num_heads, embed_dim)
 
         torch.Tensor
-            Attention weights, shape (num_heads, N)
+            Attention weights, shape (B, num_heads, S)
         """
         # get attention scores
-        att_V: torch.Tensor = self.tanh(self.V(x))  # (N, 128)
-        att_U: torch.Tensor = self.sigm(self.U(x))  # (N, 128)
+        att_V: torch.Tensor = self.tanh(self.V(x))  # (B, S, 128)
+        att_U: torch.Tensor = self.sigm(self.U(x))  # (B, S, 128)
         att = att_V * att_U
-        att = self.w(att)  # (N, num_heads)
-        att = att.transpose(1, 0)  # (num_heads, N)
+        att = self.w(att)  # (B, S, num_heads)
+        att = att.transpose(-1, -2)  # (B, num_heads, S)
         att = att.softmax(1)
 
         # get output z by taking a weighted average of the instances in x
         # with weights = attention scores
-        z = att @ x  # (num_heads, embed_dim)
+        z = att @ x  # (B, num_heads, embed_dim)
 
         return z, att

@@ -8,8 +8,11 @@ from torch import nn
 
 class PositionalEmbedding(nn.Module):
     """
+    2D sinusoidal positional embeddings.
+
     References
     Pytorch:
+        https://pytorch.org/tutorials/beginner/translation_transformer.html
     Prov-GigaPath: https://github.com/prov-gigapath/prov-gigapath/
     """
 
@@ -34,14 +37,15 @@ class PositionalEmbedding(nn.Module):
         coords : torch.Tensor
             Tile cartesian coordinates, shape (N, 2)
         """
-        x_embed = self.pe[coords[:, 0]]
-        y_embed = self.pe[coords[:, 1]]
+        x_embed = self.pe[coords[:, :, 0]]
+        y_embed = self.pe[coords[:, :, 1]]
         return torch.cat((y_embed, x_embed), dim=-1)
 
 
 class PositionalEmbeddingAlt(nn.Module):
     """
-    Uses mean of x and y sinusoidal embeddings.
+    2D sinusoidal positional embeddings. Uses mean of 1D embeddings for x
+    and y.
     """
 
     def __init__(self, embed_dim: int, max_len: int = 500) -> None:

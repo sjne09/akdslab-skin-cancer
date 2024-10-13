@@ -60,7 +60,7 @@ class SlideEncodingDataset(Dataset):
             "coords", "id", and "label"
         """
         embed_path = self.tile_embed_paths[idx]
-        embed_name = os.path.basename(embed_path)[:-4]
+        embed_name = os.path.basename(embed_path)[:-4]  # trim extension
         specimen_name = embed_name[:6]
         with open(embed_path, "rb") as f:
             embed = pickle.load(f)
@@ -145,6 +145,9 @@ def collate_tile_embeds(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
             padding,
             mode="constant",
             value=float("-inf"),
+        )
+        item["pos"] = F.pad(
+            item["pos"], padding, mode="constant", value=float("-inf")
         )
 
     # collate the tensors by stacking, ids (strings) by creating a list of ids

@@ -34,7 +34,7 @@ class MLP(nn.Module):
             prev_dim = dim
         self.h = nn.ModuleList(hidden)
 
-        self.fc_o = nn.Linear(in_features // 4, out_features)
+        self.fc_o = nn.Linear(hidden_dims[-1], out_features)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
