@@ -8,27 +8,65 @@ from torch import nn
 
 class PositionalEmbedding(nn.Module):
     """
-    References:
-    Pytorch
-    prov-gigapath
+    References
+    Pytorch:
+    Prov-GigaPath: https://github.com/prov-gigapath/prov-gigapath/
     """
 
-    def __init__(self, embed_dim: int, max_len: int = 10000) -> None:
+    def __init__(self, embed_dim: int, max_len: int = 500) -> None:
         super().__init__()
-        position = torch.arange(max_len).unsqueeze(1)
+        position = torch.arange(max_len)
+
         dim = embed_dim // 2
         div_term = torch.exp(torch.arange(0, dim, 2) * (-log(10000.0) / dim))
-        pe = torch.zeros(max_len, dim)
+
+        # for each position, multiply that position by the div_term vector
+        out = torch.outer(position, div_term)
+        pe_sin = torch.sin(out)
+        pe_cos = torch.cos(out)
+        pe = torch.cat((pe_sin, pe_cos), axis=1)
+        self.register_buffer("pe", pe)
+
+    def forward(self, coords: torch.Tensor) -> torch.Tensor:
+        """
+        Parameters
+        ----------
+        coords : torch.Tensor
+            Tile cartesian coordinates, shape (N, 2)
+        """
+        x_embed = self.pe[coords[:, 0]]
+        y_embed = self.pe[coords[:, 1]]
+        return torch.cat((y_embed, x_embed), dim=-1)
+
+
+class PositionalEmbeddingAlt(nn.Module):
+    """
+    Uses mean of x and y sinusoidal embeddings.
+    """
+
+    def __init__(self, embed_dim: int, max_len: int = 500) -> None:
+        super().__init__()
+        position = torch.arange(max_len).unsqueeze(1)
+
+        div_term = torch.exp(
+            torch.arange(0, embed_dim, 2) * (-log(10000.0) / embed_dim)
+        )
+
+        pe = torch.zeros(max_len, embed_dim)
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         self.register_buffer("pe", pe)
 
-    def forward(self, coords):
-        x_ranks = get_position_ranks(coords[:, :, 0])
-        y_ranks = get_position_ranks(coords[:, :, 1])
-        x_embed = self.pe[x_ranks]
-        y_embed = self.pe[y_ranks]
-        return torch.cat((x_embed, y_embed), dim=-1)
+    def forward(self, coords: torch.Tensor) -> torch.Tensor:
+        """
+        Parameters
+        ----------
+        coords : torch.Tensor
+            Tile cartesian coordinates, shape (N, 2)
+        """
+        x_embed = self.pe[coords[:, 0]]
+        y_embed = self.pe[coords[:, 1]]
+        return torch.stack((y_embed, x_embed), dim=0).mean(dim=0)
 
 
 def get_position_ranks(
@@ -98,17 +136,3 @@ def _get_position_ranks_torch(x: torch.Tensor) -> torch.Tensor:
     ordered_ranks.scatter_(-1, j, ranks)
 
     return ordered_ranks - 1
-
-
-# enc = PositionalEmbedding(1024, 9000)
-# x = torch.rand((2, 2500, 1024))
-# coords = torch.randint(0, 50, (2, 2500, 2))
-# pos = enc(coords)
-# print(pos.shape)
-# print(x + pos)
-
-# import matplotlib.pyplot as plt
-
-# fig = plt.figure(figsize=(10, 8))
-# plt.imshow(x[8001:9000, :], cmap="PuOr_r")
-# plt.savefig("pos.png")

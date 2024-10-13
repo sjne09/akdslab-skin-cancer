@@ -31,7 +31,7 @@ def add_positions(
     pos_x = (slide_data["coords"][:, 0] - min_x) / tile_size
     pos_y = (slide_data["coords"][:, 1] - min_y) / tile_size
 
-    slide_data["pos"] = torch.stack((pos_x, pos_y), dim=1)
+    slide_data["pos"] = torch.stack((pos_x, pos_y), dim=1).to(torch.long)
 
 
 def sort_embeds(slide_data: Dict[str, torch.Tensor]) -> None:
