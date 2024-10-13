@@ -35,10 +35,10 @@ class PositionalEmbedding(nn.Module):
         Parameters
         ----------
         coords : torch.Tensor
-            Tile cartesian coordinates, shape (N, 2)
+            Tile cartesian coordinates, shape (B, S, 2) or (N, 2)
         """
-        x_embed = self.pe[coords[:, :, 0]]
-        y_embed = self.pe[coords[:, :, 1]]
+        x_embed = self.pe[coords[..., 0]]
+        y_embed = self.pe[coords[..., 1]]
         return torch.cat((y_embed, x_embed), dim=-1)
 
 
@@ -66,10 +66,10 @@ class PositionalEmbeddingAlt(nn.Module):
         Parameters
         ----------
         coords : torch.Tensor
-            Tile cartesian coordinates, shape (N, 2)
+            Tile cartesian coordinates, shape (B, S, 2) or (N, 2)
         """
-        x_embed = self.pe[coords[:, 0]]
-        y_embed = self.pe[coords[:, 1]]
+        x_embed = self.pe[coords[..., 0]]
+        y_embed = self.pe[coords[..., 1]]
         return torch.stack((y_embed, x_embed), dim=0).mean(dim=0)
 
 
