@@ -1,4 +1,6 @@
-from typing import List, Tuple
+from enum import IntEnum
+from math import ceil
+from typing import Dict, List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -32,6 +34,148 @@ TYPE_CONFIG = {
         ),
     },
 }
+
+
+class Evaluator:
+    """
+    A class for evaluating cross validated classifiers.
+    """
+
+    def __init__(self, labels: IntEnum) -> None:
+        """
+        Initializes an Evaluator by creating dictionaries to store
+        intermediate results and axes to plot results on.
+
+        Parameters
+        ----------
+        labels : IntEnum
+            The labels used for classification
+        """
+        self.labels = labels
+
+        # dictionaries to keep eval curve results for each label
+        self.tprs = {label: [] for label in labels._member_names_}
+        self.aucs = {label: [] for label in labels._member_names_}
+        self.precisions = {label: [] for label in labels._member_names_}
+        self.aps = {label: [] for label in labels._member_names_}
+
+        # mean x vals and axes for curves
+        self.mean_fpr = np.linspace(0, 1, 100)
+        self.mean_recall = np.linspace(0, 1, 100)
+
+        r = ceil(len(labels) / 2)
+        self.roc_fig, self.roc_axs = plt.subplots(r, 2, figsize=(6 * r, 12))
+        self.prc_fig, self.prc_axs = plt.subplots(r, 2, figsize=(6 * r, 12))
+
+    def fold(
+        self,
+        probs: np.ndarray,
+        labels_onehot: np.ndarray,
+        fold_idx: int,
+        num_folds: int,
+    ) -> None:
+        """
+        Plot results from a single fold on the relevant axes and store results
+        in class attribute dicts.
+
+        Parameters
+        ----------
+        probs : np.ndarray
+            Probabilities for each class, shape (N, C)
+
+        labels_onehot : np.ndarray
+            Onehot labels, shape (N, C)
+
+        fold_idx : int
+            The index of the current fold being evaluated (0-indexed)
+
+        num_folds : int
+            The total number of folds being evaluated
+        """
+        # for each predicted class, plot the current classifier's eval
+        # and retain relevant data in dicts
+        for j, class_of_interest in enumerate(self.labels._member_names_):
+            interp_tpr, roc_auc = plot_eval(
+                mean_x=self.mean_fpr,
+                onehot_labels=labels_onehot[:, j],
+                probs=probs[:, j],
+                ax=self.roc_axs[j // 2][j % 2],
+                plot_type="ROC",
+                fold_idx=fold_idx,
+                plot_chance_level=fold_idx == num_folds - 1,
+            )
+            self.tprs[class_of_interest].append(interp_tpr)
+            self.aucs[class_of_interest].append(roc_auc)
+
+            interp_precision, average_precision = plot_eval(
+                mean_x=self.mean_recall,
+                onehot_labels=labels_onehot[:, j],
+                probs=probs[:, j],
+                ax=self.prc_axs[j // 2][j % 2],
+                plot_type="PRC",
+                fold_idx=fold_idx,
+                plot_chance_level=False,
+            )
+            self.precisions[class_of_interest].append(interp_precision)
+            self.aps[class_of_interest].append(average_precision)
+
+    def finalize(self, class_frequencies: Dict[str, float]) -> None:
+        """
+        Finalize the plots for each class by plotting the mean curves.
+
+        Parameters
+        ----------
+        class_frequencies : Dict[str, float]
+            Frequencies for each class, where keys are class names matching
+            the member names of self.labels and values are the normalized
+            frequencies
+        """
+        for j, class_of_interest in enumerate(self.labels._member_names_):
+            create_mean_curve(
+                self.mean_fpr,
+                self.tprs[class_of_interest],
+                self.aucs[class_of_interest],
+                self.roc_axs[j // 2][j % 2],
+                "ROC",
+                class_of_interest,
+            )
+
+            prc_ax = self.prc_axs[j // 2][j % 2]
+            create_mean_curve(
+                self.mean_recall,
+                self.precisions[class_of_interest],
+                self.aps[class_of_interest],
+                prc_ax,
+                "PRC",
+                class_of_interest,
+            )
+
+            # add chance line for PRC == label freq at specimen level
+            prc_ax.axhline(
+                class_frequencies[class_of_interest],
+                linestyle="--",
+                label=r"Chance level (AP = %0.2f)"
+                % (class_frequencies[class_of_interest]),
+                color="black",
+            )
+
+            # reorder legend
+            handles, labs = prc_ax.get_legend_handles_labels()
+            handles[-1], handles[-3] = handles[-3], handles[-1]
+            labs[-1], labs[-3] = labs[-3], labs[-1]
+            prc_ax.legend(handles=handles, labels=labs, loc="lower right")
+
+    def save_figs(self, experiment_name: str) -> None:
+        """
+        Save the ROC and PRC plots to the outputs directory.
+
+        Parameters
+        ----------
+        experiment_name : str
+            The name of the experiment, used as an identifier for file name
+        """
+        self.roc_fig.savefig(f"outputs/{experiment_name}-roc.png")
+        self.prc_fig.savefig(f"outputs/{experiment_name}-prc.png")
 
 
 def plot_eval(
@@ -122,7 +266,6 @@ def create_mean_curve(
     Creates a mean ROC or PRC curve based on the provided interpolated
     y-values from cross validation folds. Also plots standard deviation bands
     around the mean curve.
-
 
     Parameters
     ----------
