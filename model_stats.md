@@ -4,8 +4,8 @@
     <tr style="text-align: right;">
       <th></th>
       <th>UNI</th>
-      <th>gigapath</th>
-      <th>prism/virchow</th>
+      <th>Prov-GigaPath</th>
+      <th>PRISM/virchow</th>
     </tr>
   </thead>
   <tbody>
