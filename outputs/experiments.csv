@@ -1,31 +1,31 @@
 |foundation_model|aggregator|classifier|batch_size|lr|epochs|notes|benign_auroc|bowens_auroc|bcc_auroc|scc_auroc|benign_auprc|bowens_auprc|bcc_auprc|scc_auprc
 0|UNI|GAP|Logistic regression w/ default params|||1000.0|Did not converge|0.82|0.76|0.9|0.98|0.78|0.6|0.74|0.84
 1|UNI|GAP|XGBoost w/ default params|||||0.79|0.69|0.84|0.98|0.73|0.46|0.62|0.79
-2|UNI|GAP|MLP, (1024, 512, 256)|16.0|1e-05|30.0|||||||||
+2|UNI|GAP|MLP, (1024, 512, 256)|16.0|1e-05|30.0||0.79|0.69|0.87|0.98|0.73|0.48|0.69|0.79
 3|UNI|Ungated ABMIL, 1 Head|MLP, (1024, 512, 256)|16.0|1e-05|30.0||0.86|0.83|0.97|0.99|0.79|0.69|0.95|0.8
 4|UNI|Ungated ABMIL, 8 Heads|MLP, (1024, 512, 256)|16.0|1e-05|30.0||0.85|0.81|0.97|0.98|0.78|0.69|0.94|0.79
 5|UNI|Gated ABMIL, 1 Head|MLP, (1024, 512, 256)|16.0|1e-05|30.0||0.86|0.82|0.97|0.99|0.79|0.68|0.94|0.8
 6|UNI|Gated ABMIL, 8 Heads|MLP, (1024, 512, 256)|16.0|1e-05|30.0||0.86|0.82|0.96|0.99|0.8|0.7|0.93|0.82
-7|Prov-GigaPath|GAP|Logistic regression w/ default params|||1000.0|||||||||
-8|Prov-GigaPath|GAP|XGBoost w/ default params||||||||||||
-9|Prov-GigaPath|GAP|MLP, (1024, 512, 256)|16.0|1e-05|30.0|||||||||
+7|Prov-GigaPath|GAP|Logistic regression w/ default params|||1000.0||0.82|0.71|0.91|0.98|0.76|0.56|0.73|0.76
+8|Prov-GigaPath|GAP|XGBoost w/ default params|||||0.79|0.63|0.82|0.96|0.71|0.44|0.6|0.68
+9|Prov-GigaPath|GAP|MLP, (1024, 512, 256)|16.0|1e-05|30.0||0.79|0.65|0.86|0.97|0.73|0.44|0.66|0.66
 10|Prov-GigaPath|Ungated ABMIL, 1 Head|MLP, (1024, 512, 256)|16.0|1e-05|30.0||0.86|0.82|0.97|0.98|0.8|0.68|0.94|0.75
 11|Prov-GigaPath|Ungated ABMIL, 8 Heads|MLP, (1024, 512, 256)|16.0|1e-05|30.0||0.86|0.8|0.96|0.98|0.8|0.69|0.92|0.75
 12|Prov-GigaPath|Gated ABMIL, 1 Head|MLP, (1024, 512, 256)|16.0|1e-05|30.0||0.85|0.81|0.97|0.98|0.79|0.66|0.93|0.75
 13|Prov-GigaPath|Gated ABMIL, 8 Heads|MLP, (1024, 512, 256)|16.0|1e-05|30.0||0.86|0.8|0.96|0.98|0.8|0.69|0.92|0.71
 14|Prov-GigaPath|GigaPath, CLS token|Logistic regression w/ default params|||1000.0|Pre-trained aggregator <br> Did not converge|0.8|0.7|0.86|0.95|0.73|0.5|0.69|0.67
 15|Prov-GigaPath|GigaPath, CLS token|XGBoost w/ default params||||Pre-trained aggregator|0.73|0.59|0.78|0.96|0.65|0.39|0.48|0.62
-16|Prov-GigaPath|GigaPath, CLS token|MLP, (1024, 512, 256)|16.0|1e-05|30.0|Pre-trained aggregator||||||||
+16|Prov-GigaPath|GigaPath, CLS token|MLP, (1024, 512, 256)|16.0|1e-05|30.0|Pre-trained aggregator|0.72|0.54|0.72|0.94|0.63|0.32|0.43|0.6
 17|Prov-GigaPath|GigaPath, GAP|Logistic regression w/ default params|||1000.0|Pre-trained aggregator <br> Did not converge|0.82|0.74|0.89|0.97|0.76|0.56|0.72|0.71
 18|Prov-GigaPath|GigaPath, GAP|XGBoost w/ default params||||Pre-trained aggregator|0.78|0.61|0.8|0.97|0.69|0.42|0.57|0.66
-19|Prov-GigaPath|GigaPath, GAP|MLP, (1024, 512, 256)|16.0|1e-05|30.0|Pre-trained aggregator||||||||
-20|Virchow / PRISM|GAP|Logistic regression w/ default params|||1000.0|Did not converge||||||||
-21|Virchow / PRISM|GAP|XGBoost w/ default params||||||||||||
-22|Virchow / PRISM|GAP|MLP, (1024, 512, 256)|16.0|1e-05|30.0|||||||||
+19|Prov-GigaPath|GigaPath, GAP|MLP, (1024, 512, 256)|16.0|1e-05|30.0|Pre-trained aggregator|0.78|0.63|0.84|0.96|0.71|0.43|0.62|0.65
+20|Virchow / PRISM|GAP|Logistic regression w/ default params|||1000.0|Did not converge|0.83|0.78|0.95|0.97|0.77|0.63|0.86|0.81
+21|Virchow / PRISM|GAP|XGBoost w/ default params|||||0.78|0.66|0.86|0.97|0.7|0.48|0.67|0.67
+22|Virchow / PRISM|GAP|MLP, (1024, 512, 256)|16.0|1e-05|30.0||0.79|0.68|0.91|0.97|0.71|0.49|0.77|0.74
 23|Virchow / PRISM|Ungated ABMIL, 1 Head|MLP, (1024, 512, 256)|16.0|1e-05|30.0||0.84|0.83|0.97|0.98|0.78|0.7|0.94|0.72
 24|Virchow / PRISM|Ungated ABMIL, 8 Heads|MLP, (1024, 512, 256)|16.0|1e-05|30.0||0.85|0.82|0.97|0.98|0.79|0.68|0.94|0.76
 25|Virchow / PRISM|Gated ABMIL, 1 Head|MLP, (1024, 512, 256)|16.0|1e-05|30.0||0.84|0.84|0.97|0.98|0.79|0.7|0.94|0.72
 26|Virchow / PRISM|Gated ABMIL, 8 Heads|MLP, (1024, 512, 256)|16.0|1e-05|30.0||0.84|0.82|0.96|0.98|0.77|0.69|0.94|0.78
 27|Virchow / PRISM|PRISM|Logistic regression w/ default params|||1000.0|Pre-trained aggregator <br> Did not converge|0.88|0.86|0.95|0.97|0.8|0.76|0.92|0.79
 28|Virchow / PRISM|PRISM|XGBoost w/ default params||||Pre-trained aggregator|0.86|0.84|0.96|0.99|0.79|0.73|0.94|0.87
-29|Virchow / PRISM|PRISM|MLP, (1024, 512, 256)|16.0|1e-05|30.0|Pre-trained aggregator||||||||
+29|Virchow / PRISM|PRISM|MLP, (1024, 512, 256)|16.0|1e-05|30.0|Pre-trained aggregator|0.88|0.86|0.97|0.99|0.81|0.77|0.95|0.84
