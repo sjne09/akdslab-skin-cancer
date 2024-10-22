@@ -1,5 +1,6 @@
 import os
 import pickle
+from operator import itemgetter
 from typing import Any, Dict, List
 
 import numpy as np
@@ -69,6 +70,73 @@ class SlideEncodingDataset(Dataset):
         return embed
 
 
+class SlideClassificationDataset(Dataset):
+    """
+    Dataset for input into slide classifiers.
+    """
+
+    def __init__(
+        self,
+        slide_embeds_path: str,
+        slide_ids: List[str],
+        labels: Dict[str, int],
+    ) -> None:
+        """
+        Parameters
+        ----------
+        slide_embeds_path : str
+            Path to slide embedding pickle file. The file should contain a
+            dictionary with slide ids as keys and slide embedding tensors as
+            values
+
+        slide_ids : List[str]
+            The slide ids to include in the dataset
+
+        labels : Dict[str, int]
+            Integer labels for each slide included in the dataset. Keys are
+            slide ids and values are integer labels
+        """
+        self.slide_ids = slide_ids
+        with open(slide_embeds_path, "rb") as f:
+            slide_embeds = pickle.load(f)
+            self.slide_embeds = itemgetter(*slide_ids)(slide_embeds)
+        self.labels = labels
+
+    def __len__(self) -> int:
+        """
+        Returns the number of slides in the dataset.
+
+        Returns
+        -------
+        int
+            The number of slides in the dataset
+        """
+        return len(self.slide_names)
+
+    def __getitem__(self, idx: int) -> Dict[str, Any]:
+        """
+        Returns a slide embedding for a sampled slide.
+
+        Parameters
+        ----------
+        idx : int
+            The index of the sampled slide in self.slide_names
+
+        Returns
+        -------
+        Dict[str, Any]
+            Slide embedding for the sampled slide. Keys are "slide_embed",
+            "id", and "label"
+        """
+        embed = {}
+        embed["slide_embed"] = self.slide_embeds[idx].view(-1)
+        embed_name = self.slide_ids[idx]
+        specimen_name = embed_name[:6]
+        embed["id"] = embed_name
+        embed["label"] = self.labels[specimen_name]
+        return embed
+
+
 class TileEncodingDataset(Dataset):
     """
     Taken from prov-gigapath pipeline.
@@ -113,14 +181,16 @@ def collate_tile_embeds(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
     ----------
     batch : List[Dict[str, Any]]
         A list of samples to be collated into a batch. Each sample is a dict
-        containing tensors "tile_embeds" and "coords", and a string "id"
+        containing tensors "tile_embeds", "coords", and "pos"; a string "id",
+        and an int "label"
 
     Returns
     -------
     Dict[str, Any]
         The collated batch with keys matching input keys. "id" is a list of
-        slide ids while "tile_embeds" and "coords" remain tensors with an
-        added batch dimension
+        slide ids, "label" is a 1D tensor containing labels, and
+        "tile_embeds", "coords", and "pos" remain tensors with an added
+        batch dimension
     """
     # get the max length tile "sequence" in the batch
     max_length = 0
@@ -150,12 +220,36 @@ def collate_tile_embeds(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
             item["pos"], padding, mode="constant", value=float("-inf")
         )
 
-    # collate the tensors by stacking, ids (strings) by creating a list of ids
     collated_batch = {
         k: torch.stack([item[k] for item in batch])
-        for k in item.keys()
-        if isinstance(item[k], torch.Tensor)
+        for k in ["tile_embeds", "coords", "pos"]
     }
+    collated_batch["label"] = torch.tensor([item["label"] for item in batch])
+    collated_batch["id"] = [item["id"] for item in batch]
+    return collated_batch
+
+
+def collate_slide_embeds(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Custom collate function for loading slide embeddings.
+
+    Parameters
+    ----------
+    batch : List[Dict[str, Any]]
+        A list of samples to be collated into a batch. Each sample is a dict
+        containing a tensor "slide_embed", an int "label", and a string "id"
+
+    Returns
+    -------
+    Dict[str, Any]
+        The collated batch with keys matching input keys. "id" is a list of
+        slide ids, "label" is a 1D tensor containing labels, and
+        "slide_embed" remains a tensor with an added batch dimension
+    """
+    collated_batch = {}
+    collated_batch["slide_embed"] = torch.stack(
+        [item["slide_embed"] for item in batch]
+    )
     collated_batch["label"] = torch.tensor([item["label"] for item in batch])
     collated_batch["id"] = [item["id"] for item in batch]
     return collated_batch
