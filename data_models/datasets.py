@@ -10,6 +10,8 @@ from torch.nn import functional as F
 from torch.utils.data import Dataset
 from torchvision import transforms
 
+from utils.tile_embed_postproc import add_positions
+
 
 class SlideEncodingDataset(Dataset):
     """
@@ -169,6 +171,32 @@ class TileEncodingDataset(Dataset):
             "img": torch.from_numpy(np.array(img)),
             "coords": torch.from_numpy(np.array([x, y])).float(),
         }
+
+
+def collate_tiles(
+    batch: List[Dict[str, torch.Tensor]]
+) -> Dict[str, torch.Tensor]:
+    """
+    Custom collate function for loading tiles for use with ResNet18 + ABMIL.
+
+    Parameters
+    ----------
+    batch : List[Dict[str, torch.Tensor]]
+        A list of all tiles for a slide to be collated into a batch. Each
+        tile's data is a dict containing tensors "img" and "coords"
+
+    Returns
+    -------
+    Dict[str, torch.Tensor]
+        The collated batch with keys "img", "coords", and "pos". "img" and
+        "coords" are just the collated inputs, "pos" is a tensor of shape
+        (B, 2) with the relative position data of each tile based on coords
+    """
+    collated_batch = {
+        k: torch.stack([item[k] for item in batch]) for k in batch[0].keys()
+    }
+    add_positions(collated_batch)
+    return collated_batch
 
 
 def collate_tile_embeds(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
