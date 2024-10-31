@@ -1,7 +1,7 @@
 import json
 import os
 import pickle
-from typing import Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -13,6 +13,61 @@ load_dotenv()
 
 OUTPUT_DIR = os.getenv("OUTPUT_DIR")
 DATA_DIR = os.getenv("DATA_DIR")
+
+
+class SpecimenData:
+    def __init__(self, label_path: str, fold_path: str):
+        df = load_data(label_path=label_path, fold_path=fold_path)
+        self.df = df.set_index("specimen_id")
+        self.specimens = list(self.df.index)
+        self.onehot_labels = self._get_onehot_labels()
+        self.labels = self._get_labels()
+        self.specimens_by_fold = self._get_specimens_by_fold()
+
+    def _get_onehot_labels(self) -> Dict[str, np.ndarray]:
+        """
+        Returns a dictionary of specimen ids to one-hot encoded labels.
+
+        Returns
+        -------
+        Dict[str, np.ndarray]
+            A dictionary of specimen ids to one-hot encoded labels
+        """
+        onehot_labels = self.df[Label._member_names_].to_dict(
+            orient="split", index=True
+        )
+        onehot_labels = {
+            k: np.array(onehot_labels["data"][i])
+            for i, k in enumerate(onehot_labels["index"])
+        }
+        return onehot_labels
+
+    def _get_labels(self) -> Dict[str, int]:
+        """
+        Returns a dictionary of specimen ids to label indices.
+
+        Returns
+        -------
+        Dict[str, int]
+            A dictionary of specimen ids to label indices
+        """
+        labels = {row.name: int(row["label"]) for _, row in self.df.iterrows()}
+        return labels
+
+    def _get_specimens_by_fold(self) -> List[List[str]]:
+        """
+        Returns a list of lists of specimen ids, grouped by fold index.
+
+        Returns
+        -------
+        List[List[str]]
+            A list of lists of specimen ids, grouped by fold index
+        """
+        specimens_by_fold = self.df.groupby("fold").groups
+        specimens_by_fold = [
+            list(specs) for specs in specimens_by_fold.values()
+        ]
+        return specimens_by_fold
 
 
 def get_label(x: pd.DataFrame) -> int:
