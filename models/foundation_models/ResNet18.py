@@ -1,14 +1,14 @@
 from typing import Tuple
 
-import timm
 import torch
 from torch import nn
 from torchvision import transforms
 
 from models.foundation_models.FoundationModel import FoundationModel
+from models.resnet import ResNetFeatureExtractor
 
 
-class UNI(FoundationModel):
+class ResNet18(FoundationModel):
     def __init__(
         self, tiles_dir: str, tile_embeds_path: str, slide_embeds_path: str
     ) -> None:
@@ -28,32 +28,20 @@ class UNI(FoundationModel):
 
     def _load_tile_encoder(self) -> Tuple[nn.Module, transforms.Compose]:
         """
-        Loads the UNI model and transforms required for inference.
+        Loads the resnet18 model and transforms required for inference.
 
         Returns
         -------
         Tuple[nn.Module, transforms.Compose]
-            The UNI tile encoder model and transforms
+            The resnet18 model and transforms
         """
-        model: nn.Module = timm.create_model(
-            "vit_large_patch16_224",
-            img_size=224,
-            patch_size=16,
-            init_values=1e-5,
-            num_classes=0,
-            dynamic_img_size=True,
-        )
-        model.load_state_dict(
-            torch.load(
-                "/opt/gpudata/skin-cancer/models/UNI/assets/ckpts/"
-                + "vit_large_patch16_224.dinov2.uni_mass100k/"
-                + "pytorch_model.bin",
-            ),
-            strict=True,
-        )
+        model = ResNetFeatureExtractor()
         transform = transforms.Compose(
             [
-                transforms.Resize(224),
+                transforms.Resize(
+                    256, interpolation=transforms.InterpolationMode.BILINEAR
+                ),
+                transforms.CenterCrop(224),
                 transforms.ToTensor(),
                 transforms.Normalize(
                     mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
@@ -66,4 +54,4 @@ class UNI(FoundationModel):
         return None
 
     def _run_slide_encoder_inference(self, device: torch.device) -> None:
-        raise NotImplementedError("Slide encoder not implemented for UNI")
+        raise NotImplementedError("Slide encoder not implemented for resnet")
