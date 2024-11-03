@@ -67,14 +67,9 @@ def train_epoch(
             if isinstance(model_input, torch.Tensor)
             else model_input
         )
-        model_input = (
-            [item.squeeze(0).to(device) for item in model_input]
-            if device
-            else [item.squeeze(0) for item in model_input]
-        )
-        label: torch.Tensor = sample[label_key].squeeze(0)
+        label: torch.Tensor = sample[label_key]
 
-        logits = model(*model_input)
+        logits = model(*[item.to(device) for item in model_input])
         loss = loss_fn(logits, label.to(logits.device))
         loss.backward()
         agg_loss += loss.item()
