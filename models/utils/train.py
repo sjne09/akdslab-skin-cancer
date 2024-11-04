@@ -60,13 +60,16 @@ def train_epoch(
     model.train()
     for i, sample in enumerate(dataloader):
         # get the model inputs from the sample, convert to tuple if not
-        # already
+        # already; unsqueeze to add batch dimension if necessary
         model_input = itemgetter(*input_keys)(sample)
         model_input: Tuple[torch.Tensor] = (
             (model_input)
             if isinstance(model_input, torch.Tensor)
             else model_input
         )
+        model_input = [
+            item.unsqueeze(0) for item in model_input if len(item.shape) == 1
+        ]
         label: torch.Tensor = sample[label_key]
 
         logits = model(*[item.to(device) for item in model_input])
@@ -143,12 +146,19 @@ def val_epoch(
     model.eval()
     with torch.no_grad():
         for i, sample in enumerate(dataloader):
+            # get the model inputs from the sample, convert to tuple if not
+            # already; unsqueeze to add batch dimension if necessary
             model_input = itemgetter(*input_keys)(sample)
             model_input: Tuple[torch.Tensor] = (
                 (model_input)
                 if isinstance(model_input, torch.Tensor)
                 else model_input
             )
+            model_input = [
+                item.unsqueeze(0)
+                for item in model_input
+                if len(item.shape) == 1
+            ]
             label: torch.Tensor = sample[label_key]
 
             logits = model(*[item.to(device) for item in model_input])

@@ -189,7 +189,7 @@ class FoundationModel(ABC):
         """
         embeds_dict = self._run_slide_encoder_inference(device)
         with open(
-            os.path.join(self._slide_embeds_path, fname, ".pkl"),
+            os.path.join(self._slide_embeds_path, fname + ".pkl"),
             "wb",
         ) as f:
             pickle.dump(embeds_dict, f)
@@ -243,7 +243,7 @@ class FoundationModel(ABC):
                 ) / slide_embeds[name][emb].std()
 
         with open(
-            os.path.join(self._slide_embeds_path, fname, ".pkl"),
+            os.path.join(self._slide_embeds_path, fname + ".pkl"),
             "wb",
         ) as f:
             pickle.dump(slide_embeds, f)

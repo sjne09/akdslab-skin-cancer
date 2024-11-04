@@ -113,7 +113,7 @@ class SlideClassificationDataset(Dataset):
         int
             The number of slides in the dataset
         """
-        return len(self.slide_names)
+        return len(self.slide_ids)
 
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         """
