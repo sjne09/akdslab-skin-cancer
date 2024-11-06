@@ -16,13 +16,17 @@ DATA_DIR = os.getenv("DATA_DIR")
 
 
 class SpecimenData:
-    def __init__(self, label_path: str, fold_path: str):
+    def __init__(
+        self, label_path: str, fold_path: Optional[str] = None
+    ) -> None:
         df = load_data(label_path=label_path, fold_path=fold_path)
         self.df = df.set_index("specimen_id")
         self.specimens = list(self.df.index)
         self.onehot_labels = self._get_onehot_labels()
         self.labels = self._get_labels()
-        self.specimens_by_fold = self._get_specimens_by_fold()
+        self.specimens_by_label = self._get_specimens_by_label()
+        if fold_path is not None:
+            self.specimens_by_fold = self._get_specimens_by_fold()
 
     def _get_onehot_labels(self) -> Dict[str, np.ndarray]:
         """
@@ -68,6 +72,13 @@ class SpecimenData:
             list(specs) for specs in specimens_by_fold.values()
         ]
         return specimens_by_fold
+
+    def _get_specimens_by_label(self) -> Dict[int, List[str]]:
+        specimens_by_label = self.df.groupby("label").groups
+        specimens_by_label = [
+            list(specs) for specs in specimens_by_label.values()
+        ]
+        return specimens_by_label
 
 
 def get_label(x: pd.DataFrame) -> int:
