@@ -93,10 +93,10 @@ def train_epoch(
 def val_epoch(
     model: nn.Module,
     dataloader: DataLoader,
-    loss_fn: nn.Module,
     device: torch.device,
     input_keys: List[str],
     label_key: str,
+    loss_fn: Optional[nn.Module] = None,
 ) -> Tuple[float, torch.Tensor, torch.Tensor, List[str]]:
     """
     Validates an epoch.
@@ -109,9 +109,6 @@ def val_epoch(
     dataloader : DataLoader
         The dataloader for the validation data
 
-    loss_fn : nn.Module
-        The loss function
-
     device : torch.device
         The device to send the model and data to
 
@@ -123,16 +120,20 @@ def val_epoch(
         The key for samples drawn from the dataloader containing the labels
         for the model
 
+    loss_fn : nn.Module, optional
+        The loss function; if not provided no loss will be calculated
+
     Returns
     -------
     float
-        The average training loss for the epoch
+        The average training loss for the epoch; if loss_fn is not provided
+        this will be 0
 
     torch.Tensor
         The labels for the validation data
 
     torch.Tensor
-        The model outputs for the validation data
+        The model outputs for the validation data (softmaxed logits)
 
     List[str]
         The IDs for the validation data
@@ -155,15 +156,15 @@ def val_epoch(
                 else model_input
             )
             model_input = [
-                item.unsqueeze(0)
+                item.unsqueeze(0) if len(item.shape) == 1 else item
                 for item in model_input
-                if len(item.shape) == 1
             ]
             label: torch.Tensor = sample[label_key]
 
             logits = model(*[item.to(device) for item in model_input])
-            loss = loss_fn(logits, label.to(device))
-            agg_loss += loss.item()
+            if loss_fn is not None:
+                loss = loss_fn(logits, label.to(device))
+                agg_loss += loss.item()
 
             outputs.append(torch.softmax(logits.detach().cpu(), dim=-1))
             labels.append(label)

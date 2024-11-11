@@ -96,7 +96,8 @@ class SlideClassificationDataset(Dataset):
 
         labels : Dict[str, int]
             Integer labels for each slide included in the dataset. Keys are
-            slide ids and values are integer labels
+            specimen ids (the first six chars of a slide id) and values are
+            integer labels
         """
         self.slide_ids = slide_ids
         with open(slide_embeds_path, "rb") as f:
