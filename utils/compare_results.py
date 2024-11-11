@@ -6,6 +6,8 @@ import pandas as pd
 from pandas.core.groupby import DataFrameGroupBy
 from scipy.stats import wilcoxon
 
+from data_models.Label import Label
+
 
 def signed_rank(
     grouped_data: DataFrameGroupBy, columns: List[str]
@@ -128,26 +130,151 @@ def signed_rank_summary(data: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def main():
-    auroc_keys = [k + "_auroc" for k in ["benign", "bowens", "bcc", "scc"]]
-    auprc_keys = [k + "_auprc" for k in ["benign", "bowens", "bcc", "scc"]]
+def inference_comparison(
+    src1: str,
+    src2: str,
+    label_to_compare: int,
+    model1_name: str,
+    model2_name: str,
+) -> None:
+    """
+    Compares the predictions of two models for a given class of interest.
+    First saves a file for each model to disk, containing columns with
+    the following:
+        - If a slide is positive for the class of interest, the proportion of
+          negative instances that the model predicted with a lower score for
+          the class of interest
+        - If a slide is negative for the class of interest, the proportion of
+          positive instances that the model predicted with a higher score for
+          the class of interest
+    Then saves a file to disk containing the difference in the proportions for
+    each slide between the two models.
 
-    data = pd.read_csv("outputs/experiments_by_fold.csv", sep="|", index_col=0)
-    data = data.sort_values(by="fold", axis=0)
-    grouped = data.groupby(by=["foundation_model", "aggregator", "classifier"])
+    Parameters
+    ----------
+    src1 : str
+        The path to the predictions of the first model. Should be s csv with
+        columns "id", "ground_truth", and the class labels
 
-    signed_rank_res = signed_rank(grouped, auroc_keys + auprc_keys)
-    signed_rank_res.to_csv("outputs/signed_rank_results.csv")
-    summary = signed_rank_summary(signed_rank_res).sort_values(
-        "gt", ascending=False
+    src2 : str
+        The path to the predictions of the second model. Should be s csv with
+        columns "id", "ground_truth", and the class labels
+
+    label_to_compare : int
+        The class of interest to compare the models on. Should be one of the
+        class labels from the Label enum
+
+    model1_name : str
+        The name of the first model to use in the output filename
+
+    model2_name : str
+        The name of the second model to use in the output filename
+    """
+    label_col = Label(label_to_compare).name
+    relevant_cols = ["ground_truth", label_col]
+
+    # load the predictions from the two models
+    model1_preds = pd.read_csv(src1, index_col=0)[relevant_cols].sort_values(
+        by=label_col, ascending=False
     )
-    summary.to_csv("outputs/signed_rank_summary.csv")
-
-    boxplots(
-        grouped, auroc_keys, "AUROC boxplots", "outputs/auroc_boxplot.png"
+    model2_preds = pd.read_csv(src2, index_col=0)[relevant_cols].sort_values(
+        by=label_col, ascending=False
     )
-    boxplots(grouped, auroc_keys, "AP boxplots", "outputs/ap_boxplot.png")
 
+    # get the number of positive and negative instances for the class of
+    # interest
+    total_positives = model1_preds.loc[
+        model1_preds["ground_truth"] == label_to_compare
+    ].shape[0]
+    total_negatives = model1_preds.loc[
+        model1_preds["ground_truth"] != label_to_compare
+    ].shape[0]
 
-if __name__ == "__main__":
-    main()
+    # ensure that both dataframes contain the same number of instances of
+    # positive and negative instances for the class of interest
+    assert (
+        total_positives
+        == model2_preds.loc[
+            model2_preds["ground_truth"] == label_to_compare
+        ].shape[0]
+    )
+    assert (
+        total_negatives
+        == model2_preds.loc[
+            model2_preds["ground_truth"] != label_to_compare
+        ].shape[0]
+    )
+
+    def get_negative_count(row, df):
+        """
+        Counts the number of negative instances (in terms of the class of
+        interest) that the model predicted with a lower score for that class
+        than the current row, given that the current row is a positive
+        instance.
+        """
+        if row["ground_truth"] == label_to_compare:
+            return (
+                df.loc[
+                    (df["ground_truth"] != label_to_compare)
+                    & (df[label_col] < row[label_col])
+                ].shape[0]
+                / total_negatives
+            )
+        else:
+            return -1
+
+    def get_positive_count(row, df):
+        """
+        Counts the number of positive instances (in terms of the class of
+        interest) that the model predicted with a higher score for that class
+        than the current row, given that the current row is a negative
+        instance.
+        """
+        if row["ground_truth"] != label_to_compare:
+            return (
+                df.loc[
+                    (df["ground_truth"] == label_to_compare)
+                    & (df[label_col] > row[label_col])
+                ].shape[0]
+                / total_positives
+            )
+        else:
+            return -1
+
+    # get counts for each model
+    model1_preds["negative_count"] = model1_preds.apply(
+        get_negative_count, axis=1, df=model1_preds
+    )
+    model1_preds["positive_count"] = model1_preds.apply(
+        get_positive_count, axis=1, df=model1_preds
+    )
+    model2_preds["negative_count"] = model2_preds.apply(
+        get_negative_count, axis=1, df=model2_preds
+    )
+    model2_preds["positive_count"] = model2_preds.apply(
+        get_positive_count, axis=1, df=model2_preds
+    )
+
+    # save the results to disk
+    model1_preds.to_csv(f"outputs/{model1_name}-{label_col}.csv")
+    model2_preds.to_csv(f"outputs/{model2_name}-{label_col}.csv")
+
+    # compare the results and save to disk
+    comparison_df = pd.merge(
+        model1_preds[["negative_count", "positive_count"]],
+        model2_preds[["negative_count", "positive_count"]],
+        left_index=True,
+        right_index=True,
+        suffixes=("_prism", "_uni"),
+    )
+    comparison_df["negative_diff"] = (
+        comparison_df["negative_count_prism"]
+        - comparison_df["negative_count_uni"]
+    ).abs()
+    comparison_df["positive_diff"] = (
+        comparison_df["positive_count_prism"]
+        - comparison_df["positive_count_uni"]
+    ).abs()
+    comparison_df.sort_values(
+        by=["negative_diff", "positive_diff"], ascending=False
+    ).to_csv(f"outputs/{model1_name}-{model2_name}-{label_col}.csv")
