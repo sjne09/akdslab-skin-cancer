@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -138,17 +138,12 @@ def inference_comparison(
     model2_name: str,
 ) -> None:
     """
-    Compares the predictions of two models for a given class of interest.
-    First saves a file for each model to disk, containing columns with
-    the following:
-        - If a slide is positive for the class of interest, the proportion of
-          negative instances that the model predicted with a lower score for
-          the class of interest
-        - If a slide is negative for the class of interest, the proportion of
-          positive instances that the model predicted with a higher score for
-          the class of interest
-    Then saves a file to disk containing the difference in the proportions for
-    each slide between the two models.
+    Compares the predictions of two models for a given class of interest based
+    on the rank of the positive and negative instances. First saves a file
+    for each model to disk, containing columns with the rank of each positive
+    and negative instance for the class of interest. Then saves a file to
+    disk containing the difference in the proportions for each slide between
+    the two models.
 
     Parameters
     ----------
@@ -173,7 +168,7 @@ def inference_comparison(
     label_col = Label(label_to_compare).name
     relevant_cols = ["ground_truth", label_col]
 
-    # load the predictions from the two models
+    # load the predictions from the two models and get the ranks
     model1_preds = pd.read_csv(src1, index_col=0)[relevant_cols].sort_values(
         by=label_col, ascending=False
     )
@@ -181,79 +176,8 @@ def inference_comparison(
         by=label_col, ascending=False
     )
 
-    # get the number of positive and negative instances for the class of
-    # interest
-    total_positives = model1_preds.loc[
-        model1_preds["ground_truth"] == label_to_compare
-    ].shape[0]
-    total_negatives = model1_preds.loc[
-        model1_preds["ground_truth"] != label_to_compare
-    ].shape[0]
-
-    # ensure that both dataframes contain the same number of instances of
-    # positive and negative instances for the class of interest
-    assert (
-        total_positives
-        == model2_preds.loc[
-            model2_preds["ground_truth"] == label_to_compare
-        ].shape[0]
-    )
-    assert (
-        total_negatives
-        == model2_preds.loc[
-            model2_preds["ground_truth"] != label_to_compare
-        ].shape[0]
-    )
-
-    def get_negative_count(row, df):
-        """
-        Counts the number of negative instances (in terms of the class of
-        interest) that the model predicted with a lower score for that class
-        than the current row, given that the current row is a positive
-        instance.
-        """
-        if row["ground_truth"] == label_to_compare:
-            return (
-                df.loc[
-                    (df["ground_truth"] != label_to_compare)
-                    & (df[label_col] < row[label_col])
-                ].shape[0]
-                / total_negatives
-            )
-        else:
-            return -1
-
-    def get_positive_count(row, df):
-        """
-        Counts the number of positive instances (in terms of the class of
-        interest) that the model predicted with a higher score for that class
-        than the current row, given that the current row is a negative
-        instance.
-        """
-        if row["ground_truth"] != label_to_compare:
-            return (
-                df.loc[
-                    (df["ground_truth"] == label_to_compare)
-                    & (df[label_col] > row[label_col])
-                ].shape[0]
-                / total_positives
-            )
-        else:
-            return -1
-
-    # get counts for each model
-    model1_preds["negative_count"] = model1_preds.apply(
-        get_negative_count, axis=1, df=model1_preds
-    )
-    model1_preds["positive_count"] = model1_preds.apply(
-        get_positive_count, axis=1, df=model1_preds
-    )
-    model2_preds["negative_count"] = model2_preds.apply(
-        get_negative_count, axis=1, df=model2_preds
-    )
-    model2_preds["positive_count"] = model2_preds.apply(
-        get_positive_count, axis=1, df=model2_preds
-    )
+    _get_ranks(model1_preds, label_to_compare, label_col)
+    _get_ranks(model2_preds, label_to_compare, label_col)
 
     # save the results to disk
     model1_preds.to_csv(f"outputs/{model1_name}-{label_col}.csv")
@@ -261,8 +185,8 @@ def inference_comparison(
 
     # compare the results and save to disk
     comparison_df = pd.merge(
-        model1_preds[["negative_count", "positive_count"]],
-        model2_preds[["negative_count", "positive_count"]],
+        model1_preds[["rank_of_pos", "rank_of_neg"]],
+        model2_preds[["rank_of_pos", "rank_of_neg"]],
         left_index=True,
         right_index=True,
         suffixes=("_prism", "_uni"),
@@ -278,3 +202,95 @@ def inference_comparison(
     comparison_df.sort_values(
         by=["negative_diff", "positive_diff"], ascending=False
     ).to_csv(f"outputs/{model1_name}-{model2_name}-{label_col}.csv")
+
+
+def _get_pos_neg_counts(
+    df: pd.DataFrame, label_to_compare: int
+) -> Tuple[int, int]:
+    """
+    Given a dataframe containing the predictions of a model, returns the
+    number of positive and negative instances for the class of interest.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The dataframe containing the predictions of the model
+
+    label_to_compare : int
+        The class of interest to compare the models on. Should be one of the
+        class labels from the Label enum
+
+    Returns
+    -------
+    Tuple[int, int]
+        A tuple containing the number of positive and negative instances for
+        the class of interest
+    """
+    pos = df.loc[df["ground_truth"] == label_to_compare].shape[0]
+    neg = df.loc[df["ground_truth"] != label_to_compare].shape[0]
+    return pos, neg
+
+
+def _get_ranks(
+    df: pd.DataFrame, label_to_compare: int, label_col: str
+) -> None:
+    """
+    Given a dataframe containing the predictions of a model, calculates the
+    ranks of the positive and negative instances for the class of interest
+    and stores them in the dataframe. The dataframe is modified in place.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The dataframe containing the predictions of the model
+
+    label_to_compare : int
+        The class of interest to compare the models on. Should be one of the
+        class labels from the Label enum
+
+    label_col : str
+        The name of the column in the dataframe containing the predictions
+        for the class of interest
+    """
+    pos, neg = _get_pos_neg_counts(df, label_to_compare)
+
+    def rank_of_pos_instance(row, df):
+        """
+        Counts the number of negative instances (in terms of the class of
+        interest) that the model predicted with a lower score for that class
+        than the current row, given that the current row is a positive
+        instance. The rank is normalized by the total number of negative
+        instances.
+        """
+        if row["ground_truth"] == label_to_compare:
+            return (
+                df.loc[
+                    (df["ground_truth"] != label_to_compare)
+                    & (df[label_col] < row[label_col])
+                ].shape[0]
+                / neg
+            )
+        else:
+            return -1
+
+    def rank_of_neg_instance(row, df):
+        """
+        Counts the number of positive instances (in terms of the class of
+        interest) that the model predicted with a higher score for that class
+        than the current row, given that the current row is a negative
+        instance. The rank is normalized by the total number of negative
+        instances.
+        """
+        if row["ground_truth"] != label_to_compare:
+            return (
+                df.loc[
+                    (df["ground_truth"] == label_to_compare)
+                    & (df[label_col] > row[label_col])
+                ].shape[0]
+                / pos
+            )
+        else:
+            return -1
+
+    df["rank_of_pos"] = df.apply(rank_of_pos_instance, axis=1, df=df)
+    df["rank_of_neg"] = df.apply(rank_of_neg_instance, axis=1, df=df)
