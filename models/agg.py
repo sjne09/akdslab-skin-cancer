@@ -70,4 +70,4 @@ class MILClassifier(nn.Module):
             x.view(B, self.embed_dim * self.num_heads)
         )  # (B, d_embed)
         x = self.mlp(x)  # (B, d_out)
-        return x
+        return x, att_weights
