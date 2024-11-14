@@ -212,6 +212,25 @@ class TileLoaderDataset(Dataset):
         return (loader, label)
 
 
+class EnsembleDataset(Dataset):
+    def __init__(self, datasets: Dict[str, Dataset]):
+        first_key = list(datasets.keys())[0]
+        assert all(
+            len(datasets[ds]) == len(datasets[first_key]) for ds in datasets
+        )
+        self.datasets = datasets
+
+    def __len__(self):
+        for ds in self.datasets:
+            return len(self.datasets[ds])
+
+    def __getitem__(self, idx):
+        item = {ds: self.datasets[ds][idx] for ds in self.datasets}
+        ids = [item[ds]["id"] for ds in item]
+        assert all(i == ids[0] for i in ids)
+        return item
+
+
 class ResNetDataset(Dataset):
     """
     Taken from prov-gigapath pipeline.
