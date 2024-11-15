@@ -1,4 +1,4 @@
-id,ground_truth,na,negative_count,positive_count
+id,ground_truth,na,rank_of_pos,rank_of_neg
 660116-2,0,0.9915760159492492,1.0,-1.0
 660127-1,0,0.99110609292984,1.0,-1.0
 660129-2,0,0.9883337020874025,1.0,-1.0

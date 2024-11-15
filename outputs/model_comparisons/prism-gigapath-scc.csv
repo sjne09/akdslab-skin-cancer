@@ -1,4 +1,4 @@
-id,negative_count_prism,positive_count_prism,negative_count_uni,positive_count_uni,negative_diff,positive_diff
+id,rank_of_pos_prism,rank_of_neg_prism,rank_of_pos_gigapath,rank_of_neg_gigapath,rank_of_pos_diff,rank_of_neg_diff
 660065-5,0.5695674830640959,-1.0,0.9911412193850964,-1.0,0.4215737363210005,0.0
 660158-6,0.600833767587285,-1.0,0.9947889525794684,-1.0,0.3939551849921834,0.0
 660158-5,0.5997915581031787,-1.0,0.993225638353309,-1.0,0.39343408025013027,0.0

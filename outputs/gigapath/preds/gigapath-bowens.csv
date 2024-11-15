@@ -1,4 +1,4 @@
-id,ground_truth,bowens,negative_count,positive_count
+id,ground_truth,bowens,rank_of_pos,rank_of_neg
 660076-1,1,0.9938212633132936,1.0,-1.0
 660076-2,1,0.9910038709640504,1.0,-1.0
 660390-4,1,0.9892433881759644,1.0,-1.0

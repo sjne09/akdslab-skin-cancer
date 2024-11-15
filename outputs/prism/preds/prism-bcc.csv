@@ -1,4 +1,4 @@
-id,ground_truth,bcc,negative_count,positive_count
+id,ground_truth,bcc,rank_of_pos,rank_of_neg
 660098-3,2,0.999794065952301,1.0,-1.0
 660098-4,2,0.9997777342796326,1.0,-1.0
 660369-6,2,0.9997738003730774,1.0,-1.0

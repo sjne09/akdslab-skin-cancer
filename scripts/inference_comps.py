@@ -18,7 +18,8 @@ model_pred_paths = [
 ]
 
 for i in range(len(models) - 1):
-    for j in range(i, len(models)):
+    for j in range(i + 1, len(models)):
+        print(models[i], models[j])
         for label in Label:
             inference_comparison(
                 os.path.join(OUTPUT_DIR, model_pred_paths[i]),

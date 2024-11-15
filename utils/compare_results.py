@@ -189,19 +189,22 @@ def inference_comparison(
         model2_preds[["rank_of_pos", "rank_of_neg"]],
         left_index=True,
         right_index=True,
-        suffixes=("_prism", "_uni"),
+        suffixes=(f"_{model1_name}", f"_{model2_name}"),
     )
-    comparison_df["negative_diff"] = (
-        comparison_df["negative_count_prism"]
-        - comparison_df["negative_count_uni"]
+    comparison_df["rank_of_pos_diff"] = (
+        comparison_df[f"rank_of_pos_{model1_name}"]
+        - comparison_df[f"rank_of_pos_{model2_name}"]
     ).abs()
-    comparison_df["positive_diff"] = (
-        comparison_df["positive_count_prism"]
-        - comparison_df["positive_count_uni"]
+    comparison_df["rank_of_neg_diff"] = (
+        comparison_df[f"rank_of_neg_{model1_name}"]
+        - comparison_df[f"rank_of_neg_{model2_name}"]
     ).abs()
     comparison_df.sort_values(
-        by=["negative_diff", "positive_diff"], ascending=False
-    ).to_csv(f"outputs/{model1_name}-{model2_name}-{label_col}.csv")
+        by=["rank_of_pos_diff", "rank_of_neg_diff"], ascending=False
+    ).to_csv(
+        "outputs/model_comparisons/"
+        f"{model1_name}-{model2_name}-{label_col}.csv"
+    )
 
 
 def _get_pos_neg_counts(
