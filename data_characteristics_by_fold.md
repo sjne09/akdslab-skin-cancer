@@ -67,6 +67,15 @@
       <th>0.585895</th>
       <th>0.414105</th>
     </tr>
+    <tr>
+      <th>Counts</th>
+      <th>553</th>
+      <th>171</th>
+      <th>116</th>
+      <th>37</th>
+      <th>324</th>
+      <th>229</th>
+    </tr>
   </tbody>
 </table>
 </div>
@@ -141,6 +150,15 @@
       <th>0.043956</th>
       <th>0.538462</th>
       <th>0.461538</th>
+    </tr>
+    <tr>
+      <th>Counts</th>
+      <th>455</th>
+      <th>140</th>
+      <th>85</th>
+      <th>20</th>
+      <th>245</th>
+      <th>210</th>
     </tr>
   </tbody>
 </table>
