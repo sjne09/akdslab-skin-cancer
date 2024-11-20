@@ -1,7 +1,7 @@
 import os
 import pickle
 from operator import itemgetter
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import torch
@@ -49,7 +49,7 @@ class SlideEncodingDataset(Dataset):
 
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         """
-        Returns a tile embeddings for a sampled slide.
+        Returns tile embeddings for a sampled slide.
 
         Parameters
         ----------
@@ -213,22 +213,87 @@ class TileLoaderDataset(Dataset):
 
 
 class EnsembleDataset(Dataset):
-    def __init__(self, datasets: Dict[str, Dataset]):
-        first_key = list(datasets.keys())[0]
-        assert all(
-            len(datasets[ds]) == len(datasets[first_key]) for ds in datasets
-        )
-        self.datasets = datasets
+    """
+    An ensemble dataset for input into an ensemble model. Accepts
+    SlideEncodingDatasets and SlideClassifierDatasets.
 
-    def __len__(self):
-        for ds in self.datasets:
-            return len(self.datasets[ds])
+    Not to be used with a dataloader - only batch size of 1 is supported.
+    """
 
-    def __getitem__(self, idx):
-        item = {ds: self.datasets[ds][idx] for ds in self.datasets}
-        ids = [item[ds]["id"] for ds in item]
+    def __init__(
+        self,
+        tile_datasets: List[SlideEncodingDataset],
+        slide_datasets: List[SlideClassificationDataset],
+    ) -> None:
+        """
+        Parameters
+        ----------
+        tile_datasets : List[SlideEncodingDataset]
+            A list of datasets for input into slide encoders. Each entry in
+            the list should correspond to a different model's tile embedding
+            outputs
+
+        slide_datasets : List[SlideClassificationDataset]
+            A list of datasets for input into classifiers. Each entry in
+            the list should correspond to a different model's slide embedding
+            outputs
+        """
+        self.tile_datasets = tile_datasets
+        self.slide_datasets = slide_datasets
+
+        if len(self.tile_datasets) > 0:
+            assert all(
+                len(ds) == len(self.tile_datasets[0])
+                for ds in self.tile_datasets
+            )
+        if len(self.slide_datasets) > 0:
+            assert all(
+                len(ds) == len(self.slide_datasets[0])
+                for ds in self.slide_datasets
+            )
+        if len(self.slide_datasets) > 0 and len(self.tile_datasets) > 0:
+            assert len(self.tile_datasets[0]) == len(self.slide_datasets[0])
+
+    def __len__(self) -> int:
+        """
+        Returns the number of slides in the dataset.
+
+        Returns
+        -------
+        int
+            The number of slides in the dataset
+        """
+        return len(self.tile_datasets[0])
+
+    def __getitem__(
+        self, idx: int
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """
+        Returns tile embeddings and slide embeddings for a sampled slide.
+
+        Parameters
+        ----------
+        idx : int
+            The index of the sampled slide
+
+        Returns
+        -------
+        Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]
+            Tile embeddings for the sampled slide. Keys are "tile_embeds",
+            "coords", "id", and "label". Each entry in the list contains
+            embeds from a different tile encoder
+
+            Slide embeddings for the sampled slide. Keys are "slide_embed",
+            "id", and "label". Each entry in the list contains embeds from a
+            different slide encoder
+        """
+        tile_items = [ds[idx] for ds in self.tile_datasets]
+        slide_items = [ds[idx] for ds in self.slide_datasets]
+        ids = [item["id"] for item in (tile_items + slide_items)]
+        labels = [item["label"] for item in (tile_items + slide_items)]
         assert all(i == ids[0] for i in ids)
-        return item
+        assert all(label == labels[0] for label in labels)
+        return tile_items, slide_items
 
 
 class ResNetDataset(Dataset):
@@ -352,17 +417,16 @@ def collate_tile_embeds(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
         max_length = max(max_length, item["tile_embeds"].shape[0])
 
     # apply padding to tile embeds and coords to ensure all tensors have the
-    # same shape prior to collation
+    # same shape prior to collation. padding is applied to the right
     for item in batch:
         tiles = item["tile_embeds"].shape[0]
-        lpad = (max_length - tiles) // 2
-        rpad = max_length - tiles - lpad
-        padding = (0, 0, lpad, rpad)
+        padding = (0, max_length - tiles)
 
         item["tile_embeds"] = F.pad(
             item["tile_embeds"],
             padding,
             mode="constant",
+            value=0,
         )
         item["coords"] = F.pad(
             item["coords"],

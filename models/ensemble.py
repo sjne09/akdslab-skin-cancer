@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import List, Optional, Union
 
 import torch
 from torch import nn
@@ -8,97 +8,149 @@ from .MLP import MLP
 from .pos_embedding import PositionalEmbedding
 
 
+class ABMILWrapper(nn.Module):
+    """
+    A wrapper for ABMIL to use with nn.Sequential
+    """
+
+    def __init__(self, abmil: Union[GatedMILAttention, MILAttention]) -> None:
+        super(ABMILWrapper, self).__init__()
+        self.abmil = abmil
+
+    def forward(self, x) -> torch.Tensor:
+        # only return the output, not the attention weights
+        return self.abmil(x)[0]
+
+
 class EnsembleClassifier(nn.Module):
     def __init__(
         self,
-        uni_embed_dim: int = 1024,
-        gigapath_embed_dim: int = 1536,
-        prism_embed_dim: int = 1280,
+        tile_encoder_dim: Optional[Union[int, List[int]]] = None,
+        slide_encoder_dim: Optional[Union[int, List[int]]] = None,
         out_features: int = 4,
-        num_heads: int = 1,
-        gated: bool = False,
+        abmil_heads: int = 1,
+        gated_abmil: bool = False,
     ) -> None:
         """
         Parameters
         ----------
-        embed_dim : int
-            The number of features in the input
+        tile_encoder_dim : Union[int, List[int]]
+            The dimension of outputs from the tile encoder models included in
+            the ensemble
+
+        slide_encoder_dim : Union[int, List[int]]
+            The dimension of outputs from the slide encoder models included in
+            the ensemble
 
         out_features : int
             The number of features in the output
 
-        num_heads : int
-            The number of attention heads
+        abmil_heads : int
+            The number of ABMIL attention heads
 
-        gated : bool
-            Whether to use the gated MIL architecture
+        gated_abmil : bool
+            Whether to use the gated ABMIL architecture
         """
         super().__init__()
-        self.uni_embed_dim = uni_embed_dim
-        self.gigapath_embed_dim = gigapath_embed_dim
-        self.prism_embed_dim = prism_embed_dim
-        self.total_embed_dim = (
-            uni_embed_dim + gigapath_embed_dim + prism_embed_dim
-        )
-        self.num_heads = num_heads
+        self.total_dim = 0
 
-        self.uni_pos = PositionalEmbedding(uni_embed_dim)
-        self.gigapath_pos = PositionalEmbedding(gigapath_embed_dim)
-
-        if gated:
-            self.uni_attn = GatedMILAttention(uni_embed_dim, num_heads)
-            self.gigapath_attn = GatedMILAttention(
-                gigapath_embed_dim, num_heads
+        # set up tile aggregators if necessary to get slide embeddings
+        if tile_encoder_dim is not None:
+            self.tile_encoder_dim = (
+                tile_encoder_dim
+                if isinstance(tile_encoder_dim, list)
+                else [tile_encoder_dim]
             )
-        else:
-            self.uni_attn = MILAttention(uni_embed_dim, num_heads)
-            self.gigapath_attn = MILAttention(gigapath_embed_dim, num_heads)
+            self.total_dim += sum(self.tile_encoder_dim)
 
-        self.uni_proj = nn.Linear(uni_embed_dim * num_heads, uni_embed_dim)
-        self.gigapath_proj = nn.Linear(
-            gigapath_embed_dim * num_heads, gigapath_embed_dim
-        )
+            # set up ABMIL for tile encoder models
+            abmil = MILAttention if not gated_abmil else GatedMILAttention
+            pos_embeddings = []
+            aggregators = []
+            for dim in self.tile_encoder_dim:
+                pos_embeddings.append(PositionalEmbedding(dim))
+                aggregators.append(
+                    nn.Sequential(
+                        ABMILWrapper(abmil(dim, abmil_heads)),
+                        nn.Flatten(1, -1),
+                        nn.Linear(dim * abmil_heads, dim),
+                    )
+                )
+            self.pos_embeddings = nn.ModuleList(pos_embeddings)
+            self.aggregators = nn.ModuleList(aggregators)
+
+        # get slide encoder dims if necessary
+        if slide_encoder_dim is not None:
+            self.slide_encoder_dim = (
+                slide_encoder_dim
+                if isinstance(slide_encoder_dim, list)
+                else [slide_encoder_dim]
+            )
+            self.total_dim += sum(self.slide_encoder_dim)
+
         self.mlp = MLP(
-            in_features=self.total_embed_dim,
+            in_features=self.total_dim,
             hidden_dims=[1024, 512, 256],
             out_features=out_features,
         )
 
     def forward(
-        self, x: Dict[str, torch.Tensor], coords: Dict[str, torch.Tensor]
+        self,
+        tile_embeds: Optional[Union[torch.Tensor, List[torch.Tensor]]] = None,
+        coords: Optional[Union[torch.Tensor, List[torch.Tensor]]] = None,
+        slide_embeds: Optional[Union[torch.Tensor, List[torch.Tensor]]] = None,
     ) -> torch.Tensor:
         """
         Performs a forward pass.
 
         Parameters
         ----------
-        x : torch.Tensor
-            Input data, shape (B, S, d_embed)
+        tile_embeds : Union[torch.Tensor, List[torch.Tensor]]
+            Input tile embeddings, shape (B, S, d_embed), where d_embed is
+            input model dependent. If a list, the order of the embeddings
+            must match the order of the tile_encoder_dim parameter from model
+            init
 
-        coords : torch.Tensor
-            Coordinates matching to input tensor, shape (B, S, 2)
+        coords : Union[torch.Tensor, List[torch.Tensor]]
+            Coordinates matching to input tile embed tensors, shape (B, S, 2)
+
+        slide_embeds : Union[torch.Tensor, List[torch.Tensor]]
+            Input slide embeddings, shape (B, d_embed), where d_embed is
+            input model dependent. If a list, the order of the embeddings
+            must match the order of the slide_encoder_dim parameter from model
+            init
 
         Returns
         -------
         torch.Tensor
             The output, shape (B, d_out)
         """
-        B = x["uni"].shape[0]
-        x_uni = x["uni"] + self.uni_pos(coords["uni"])  # (B, S, d_embed)
-        x_gigapath = x["gigapath"] + self.gigapath_pos(
-            coords["gigapath"]
-        )  # (B, S, d_embed)
+        # put the slide embeds into a list if necessary
+        if slide_embeds is not None:
+            slide_embeds = (
+                slide_embeds
+                if isinstance(slide_embeds, list)
+                else [slide_embeds]
+            )
+        else:
+            slide_embeds = []
 
-        x_uni, _ = self.uni_attn(x_uni)  # (B, num_heads, d_embed)
-        x_gigapath, _ = self.gigapath_attn(x_gigapath)
+        # run the tile embeds through the aggregators
+        if tile_embeds is not None:
+            tile_embeds = (
+                tile_embeds if isinstance(tile_embeds, list) else [tile_embeds]
+            )
+            coords = coords if isinstance(coords, list) else [coords]
 
-        x_uni = self.uni_proj(
-            x_uni.view(B, self.uni_embed_dim * self.num_heads)
-        )
-        x_gigapath = self.gigapath_proj(
-            x_gigapath.view(B, self.gigapath_embed_dim * self.num_heads)
-        )
+            for i, embed in enumerate(tile_embeds):
+                x = embed + self.pos_embeddings[i](
+                    coords[i]
+                )  # (B, S, d_embed)
+                x = self.aggregators[i](x)  # (B, d_embed)
+                slide_embeds.append(x)
 
-        x = torch.cat([x_uni, x_gigapath, x["prism"]], dim=-1)  # (B, d_total)
+        # concatenate the slide embeds and aggregator outputs and run through
+        # MLP
+        x = torch.cat(slide_embeds, dim=-1)  # (B, d_total)
         x = self.mlp(x)  # (B, d_out)
         return x

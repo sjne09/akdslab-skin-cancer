@@ -14,7 +14,7 @@ def train_epoch(
     grad_accum_steps: int,
     input_keys: List[str],
     label_key: str,
-    device: Optional[torch.device] = None,
+    device: torch.device,
 ) -> float:
     """
     Trains an epoch.
@@ -45,7 +45,7 @@ def train_epoch(
         The key for samples drawn from the dataloader containing the labels
         for the model
 
-    device : Optional[torch.device]
+    device : torch.device
         The device to send the model and data to. If not provided, the model
         and data will not be moved to a device
 
@@ -56,7 +56,7 @@ def train_epoch(
     """
     agg_loss = 0.0
 
-    model = model.to(device) if device else model
+    model = model.to(device)
     model.train()
     for i, sample in enumerate(dataloader):
         # get the model inputs from the sample, convert to tuple if not
@@ -68,12 +68,15 @@ def train_epoch(
             else model_input
         )
         model_input = [
-            item.unsqueeze(0) for item in model_input if len(item.shape) == 1
+            item.unsqueeze(0) if len(item.shape) == 1 else item
+            for item in model_input
         ]
         label: torch.Tensor = sample[label_key]
 
         logits = model(*[item.to(device) for item in model_input])
-        loss = loss_fn(logits, label.to(logits.device))
+        logits = logits[0] if isinstance(logits, tuple) else logits
+
+        loss = loss_fn(logits, label.to(device))
         loss.backward()
         agg_loss += loss.item()
 
@@ -162,6 +165,8 @@ def val_epoch(
             label: torch.Tensor = sample[label_key]
 
             logits = model(*[item.to(device) for item in model_input])
+            logits = logits[0] if isinstance(logits, tuple) else logits
+
             if loss_fn is not None:
                 loss = loss_fn(logits, label.to(device))
                 agg_loss += loss.item()
