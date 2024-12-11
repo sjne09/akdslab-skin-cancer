@@ -24,3 +24,4 @@ class NCLabel(IntEnum):
     bcc_nodular = 3
     bcc_superficial = 4
     scc = 5
+    artifact = 6

@@ -11,7 +11,7 @@ import numpy as np
 import torch
 from dotenv import load_dotenv
 from shapely import Polygon, box
-from sklearn.cluster import KMeans
+from sklearn.cluster import HDBSCAN
 from torch.nn import functional as F
 
 from data_models.Label import Label
@@ -25,6 +25,8 @@ OUTPUT_DIR = os.getenv("OUTPUT_DIR")
 
 
 class NearestCentroid:
+    """WIP"""
+
     def __init__(
         self, specimen_ids: List[List[str]], embeddings_path: str
     ) -> None:
@@ -41,28 +43,32 @@ class NearestCentroid:
         tile_embeds = self._get_random_specs()
 
         # set the baseline centroid for the NA class
-        na_baseline = tile_embeds["na"]["tile_embeds"].mean(dim=0)
+        # na_baseline = tile_embeds["na"]["tile_embeds"].mean(dim=0)
 
         # fit a kmeans model for each class with 2 centroids (assuming tiles
         # are either class representative or representative of the NA class)
-        kmeans = {}
+        raw_medoids = {}
         for c in tile_embeds.keys():
-            kmeans[c] = KMeans(n_clusters=2, random_state=0).fit(
+            print(f"fitting for {c}")
+            clf = HDBSCAN(store_centers="both").fit(
                 tile_embeds[c]["tile_embeds"]
             )
+            print(c, np.unique(clf.labels_, return_counts=True))
+            raw_medoids[c] = torch.tensor(clf.medoids_, dtype=torch.float32)
 
-        class_centroids = []
-        for i, kmean in enumerate(kmeans.values()):
+        na_baseline = raw_medoids["na"]
+
+        for k, v in raw_medoids.items():
+            print(k, v.shape)
+
+        class_centroids = {}
+        for i, centroids in enumerate(raw_medoids.values()):
             # if the class is NA, use the baseline centroid
             if i == Label.na:
-                class_centroids.append(na_baseline)
                 continue
 
             # get the centroid that is furthest from the na baseline centroid
             # assume this is the class representative centroid
-            centroids = torch.tensor(
-                kmean.cluster_centers_, dtype=torch.float32
-            )
             class_rep_centroid = F.cosine_similarity(
                 na_baseline, centroids, dim=-1
             ).argmin()
@@ -78,13 +84,13 @@ class NearestCentroid:
         tile_preds = X @ self.centroids.T
         return tile_preds
 
-    def _get_random_specs(self) -> Dict[str, str]:
+    def _get_random_specs(self) -> Dict[str, Dict[str, torch.Tensor]]:
         """
         Randomly samples one specimen from each class.
 
         Returns
         -------
-        Dict[str, str]
+        Dict[str, Dict[str, torch.Tensor]]
             Dictionary of tile embeddings for one randomly sampled specimen
             id for each class
         """
@@ -135,35 +141,63 @@ class AdhocNearestCentroid:
     def fit(
         self,
         tile_embed_dir: str,
+        *,
         roi_config: Optional[Dict[str, str]] = None,
         roi_dir: Optional[str] = None,
     ):
         """
-        Must provide either roi_config or roi_dir.
+        Fit the model. Must provide either roi_config or roi_dir.
+
+        Parameters
+        ----------
+        tile_embed_dir : str
+            The path to the directory containing tile embedding data
+
+        roi_config : Optional[Dict[str, str]]
+            The config specifying how to determine ROIs to extract tiles from.
+            Must be provided if roi_dir is not provided
+
+        roi_dir : Optional[str]
+            Path to directory containing pre-calculated ROI tiles. Must be
+            provided if roi_config is not provided. Assumes naming convention
+            used in _roi_tiles_by_slide
         """
         centroids = []
         roi_tiles = {}
 
-        # if roi_config is provided, ROI tiles must be determined
-        # otherwise, assume roi_dir is provided with pre-calculated ROI tiles
+        assert roi_config is not None or roi_dir is not None
+
         if roi_config is not None:
+            # for each classification specified in polygon_type, get the
+            # polygons, then extract the tiles that fall in the polygons
             polygon_dir = roi_config["annotation_directory"]
             slide_dir = roi_config["slide_directory"]
+            tiles_dir = roi_config["tiles_directory"]
 
             for name, pg_type in roi_config["polygon_type"].items():
                 root = os.path.join(polygon_dir, name)
-
                 # for classes with subclasses, must use modified process
                 if pg_type == "subclass":
                     pgs = self._get_subclass_polygons(root)
                     for label, polygons in pgs.items():
                         roi_tiles[label] = self._roi_tiles_by_slide(
-                            polygons,
-                            slide_dir,
+                            polygon_map=polygons,
+                            slide_dir=slide_dir,
+                            tiles_dir=tiles_dir,
+                            classification=label,
+                            output_dir=roi_config["roi_tiles_output_directory"]
+                            or None,
                         )
                 else:
                     polygons = self._get_class_polygons(root)
-                    roi_tiles[name] = self._roi_tiles_by_slide(pgs, slide_dir)
+                    roi_tiles[name] = self._roi_tiles_by_slide(
+                        polygon_map=polygons,
+                        slide_dir=slide_dir,
+                        tiles_dir=tiles_dir,
+                        classification=name,
+                        output_dir=roi_config["roi_tiles_output_directory"]
+                        or None,
+                    )
         else:
             for label in self.labels._member_names_:
                 with open(
@@ -178,16 +212,56 @@ class AdhocNearestCentroid:
 
         self.centroids = torch.stack(centroids, dim=0)
 
-    def predict(self, X: torch.Tensor) -> torch.Tensor:
+    def predict(
+        self, X: torch.Tensor, mode: str = "dot_product"
+    ) -> torch.Tensor:
         """
-        Returns dot products between the rows of X and the columns of
-        centroids.
+        Returns predictions as logits based on the selected mode.
+
+        Parameters
+        ----------
+        X : torch.Tensor
+            The tiles to run inference on; shape (N, embed_dim)
+
+        mode : str
+            The mode to use for determining centroid distance/similarity.
+            Options are:
+                "dot_product": the raw dot products of the rows of X and the
+                centroids
+                "euclidean": the euclidean distance between the rows of X and
+                the centroids
+                "cosine": the cosine similarity between rows of X and the
+                centroids
+
+        Returns
+        -------
+        torch.Tensor
+            The model outputs; shape (N, C), where C is the number of classes/
+            centroids
         """
         if self.centroids is None:
             raise Exception("Model must be fit first.")
-        return X @ self.centroids.T
 
-    def save_model(self, output_dir: str):
+        modes = {
+            "dot_product": self._dot_product,
+            "euclidean": self._euclidean_distance,
+            "cosine": self._cosine_similarity,
+        }
+
+        try:
+            return modes[mode](X)
+        except KeyError:
+            raise ValueError("Invalid mode selected.")
+
+    def save_model(self, output_dir: str) -> None:
+        """
+        Pickles the model centroids.
+
+        Parameters
+        ----------
+        output_dir : str
+            The directory to save the centroids to
+        """
         with open(os.path.join(output_dir, "param.pkl"), "wb") as f:
             pickle.dump(self.centroids, f)
 
@@ -324,10 +398,23 @@ class AdhocNearestCentroid:
                 data = [data]
         return data
 
-    def _get_tile_coords(self, slide_path: str) -> List[Tuple[int, int]]:
+    def _get_tile_coords(self, tiles_path: str) -> List[Tuple[int, int]]:
+        """
+        Gets coordinates from file names contained in tiles_path.
+
+        Parameters
+        ----------
+        tiles_path : str
+            Path to a directory containing slide tiles
+
+        Returns
+        -------
+        List[Tuple[int, int]]
+            Coordinates for all tiles in tiles_path in (x, y) pairs
+        """
         tiles = [
             tile[:-4]
-            for tile in os.listdir(slide_path)
+            for tile in os.listdir(tiles_path)
             if tile.endswith(".png")
         ]
 
@@ -344,16 +431,53 @@ class AdhocNearestCentroid:
         origin: Tuple[int, int],
         downscale_factor: float,
     ) -> Tuple[int, int]:
+        """
+        Converts coords from a processed WSI to coords on the original WSI.
+
+        Parameters
+        ----------
+        coords : Tuple[int, int]
+            Coords to convert
+
+        origin : Tuple[int, int]
+            The coordinates of the origin for the processed slide
+
+        downscale_factor : float
+            The downscale factor for the processed slide
+
+        Returns
+        -------
+        Tuple[int, int]
+            The coordinates to convert
+        """
         return (
             int((coords[0] - origin[0]) / downscale_factor),
             int((coords[1] - origin[1]) / downscale_factor),
         )
 
     def _map_coords(
-        self, slide_path: str
+        self, slide_path: str, tiles_path: str
     ) -> Dict[Tuple[int, int], Tuple[int, int]]:
+        """
+        Maps tile coords from the original WSI to coords for the tiles
+        derived from a processed slide
+
+        Parameters
+        ----------
+        slide_path : str
+            Path to the original WSI
+
+        tiles_path : str
+            Path to the directory containing tiles corresponding to the WSI
+
+        Returns
+        -------
+        Dict[Tuple[int, int], Tuple[int, int]]
+            A mapping of original coordinates to coordinates of tiles from
+            the processed WSI
+        """
         img = load_slide(slide_path)
-        coords = self._get_tile_coords(slide_path)
+        coords = self._get_tile_coords(tiles_path)
         # map the original coords to the modified coords
         coord_mapping = {
             self._calculate_original_coords(
@@ -365,16 +489,47 @@ class AdhocNearestCentroid:
 
     def _roi_tiles_by_slide(
         self,
-        polygon_map: Dict[str, Polygon],
+        polygon_map: Dict[str, List[Polygon]],
         slide_dir: str,
+        tiles_dir: str,
         classification: Optional[str] = None,
         output_dir: Optional[str] = None,
     ) -> Dict[str, Set[Tuple[int, int]]]:
+        """
+        Gets relevant tiles intersecting each polygon and returns a mapping
+        of slide_ids to relevant tile coords.
+
+        Parameters
+        ----------
+        polygon_map : Dict[str, List[Polygon]]
+            A dict with slide ids as keys and a list of polygons as values
+
+        slide_dir : str
+            The path to the directory containing slide .svs images
+
+        tiles_dir : str
+            The path to the directory containing subdirectories with tile
+            images for each slide
+
+        classification : Optional[str]
+            The classification for the extracted tiles, used for naming the
+            pickled results if output_dir is provided
+
+        output_dir : Optional[str]
+            The directory to save the output dict to
+
+        Returns
+        -------
+        Dict[str, Set[Tuple[int, int]]]
+            A dict with slide ids as keys and a set of tuples containing
+            (x, y) coordinate pairs as values
+        """
         relevant_tiles = {}
         for slide_id, polygons in polygon_map.items():
             relevant_tiles[slide_id] = set()
             coord_map = self._map_coords(
-                os.path.join(slide_dir), f"{slide_id}.svs"
+                os.path.join(slide_dir, f"{slide_id}.svs"),
+                os.path.join(tiles_dir, f"{slide_id}.svs"),
             )
             for polygon in polygons:
                 roi_tiles = self._extract_relevant_tiles(
@@ -461,6 +616,37 @@ class AdhocNearestCentroid:
             cluster.extend(self._get_roi_embeds(embeds, roi_tiles[slide]))
         return torch.stack(cluster, dim=0).mean(dim=0).float()
 
+    def _dot_product(self, X: torch.Tensor) -> torch.Tensor:
+        return X @ self.centroids.T
+
+    def _cosine_similarity(self, X: torch.Tensor) -> torch.Tensor:
+        dp = self._dot_product(X)
+        X_norm = torch.norm(X, dim=-1, keepdim=True)
+        centroid_norm = torch.norm(self.centroids, dim=-1, keepdim=True)
+        return dp / (X_norm @ centroid_norm.T)
+
+    def _euclidean_distance(self, X: torch.Tensor) -> torch.Tensor:
+        # reshape to enable broadcasting
+        X_expanded = X.unsqueeze(1)
+        centroids_expanded = self.centroids.unsqueeze(0)
+
+        # calculate euclidean distance
+        squared_diff = (X_expanded - centroids_expanded) ** 2
+        sum_squared_diff = squared_diff.sum(dim=-1)
+        return torch.sqrt(sum_squared_diff)
+
+    def load_model(self, path: str) -> None:
+        """
+        Load pickled centroids.
+
+        Parameters
+        ----------
+        path : str
+            Path to pickled centroids
+        """
+        with open(path, "rb") as f:
+            self.centroids = pickle.load(f)
+
 
 def plot_results(spec_level_probs, onehot_labels):
     roc_fig, roc_axs = plt.subplots(2, 2, figsize=(10, 10))
@@ -497,7 +683,7 @@ def main():
     data = SpecimenData(labels_path)
     clf = NearestCentroid(data.specimens_by_label, embeddings_path)
     clf.fit()
-
+    return
     slides = [
         s for s in os.listdir(embeddings_path) if s[:6] in data.specimens
     ]
