@@ -36,6 +36,11 @@ class PositionalEmbedding(nn.Module):
         ----------
         coords : torch.Tensor
             Tile cartesian coordinates, shape (B, S, 2) or (N, 2)
+
+        Returns
+        -------
+        torch.Tensor
+            Positional embeddings for the input coords
         """
         x_embed = self.pe[coords[..., 0]]
         y_embed = self.pe[coords[..., 1]]
@@ -67,6 +72,11 @@ class PositionalEmbeddingAlt(nn.Module):
         ----------
         coords : torch.Tensor
             Tile cartesian coordinates, shape (B, S, 2) or (N, 2)
+
+        Returns
+        -------
+        torch.Tensor
+            Positional embeddings for the input coords
         """
         x_embed = self.pe[coords[..., 0]]
         y_embed = self.pe[coords[..., 1]]
@@ -76,7 +86,19 @@ class PositionalEmbeddingAlt(nn.Module):
 def get_position_ranks(
     x: Union[np.ndarray, torch.Tensor]
 ) -> Union[np.ndarray, torch.Tensor]:
-    """ """
+    """
+    Get position ranks from coordinates.
+
+    Parameters
+    ----------
+    x : Union[np.ndarray, torch.Tensor]
+        A 2D iterable containing cartesian coordinate pairs
+
+    Returns
+    -------
+    Union[np.ndarray, torch.Tensor]
+        Position rank pairs corresponding to input coordinate pairs
+    """
     if isinstance(x, np.ndarray):
         return _get_position_ranks_np(x)
     elif isinstance(x, torch.Tensor):
@@ -86,7 +108,20 @@ def get_position_ranks(
 
 
 def _get_position_ranks_np(x: np.ndarray) -> np.ndarray:
-    """Taken from scipy.stats.rankdata"""
+    """
+    Taken from scipy.stats.rankdata
+    Get position ranks from coordinates.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        A 2D array containing cartesian coordinate pairs
+
+    Returns
+    -------
+    np.ndarray
+        Position rank pairs corresponding to input coordinate pairs
+    """
     j = np.argsort(x, axis=-1)
     y = np.take_along_axis(x, j, axis=-1)
     i = np.concatenate(
@@ -109,7 +144,20 @@ def _get_position_ranks_np(x: np.ndarray) -> np.ndarray:
 
 
 def _get_position_ranks_torch(x: torch.Tensor) -> torch.Tensor:
-    """Adapted from scipy.stats.rankdata"""
+    """
+    Adapted from scipy.stats.rankdata
+        Get position ranks from coordinates.
+
+    Parameters
+    ----------
+    x : torch.Tensor
+        A 2D tensor containing cartesian coordinate pairs
+
+    Returns
+    -------
+    torch.Tensor
+        Position rank pairs corresponding to input coordinate pairs
+    """
     # get the sorting indices and sort x
     j = torch.argsort(x, dim=-1)
     y = torch.gather(x, -1, j)
