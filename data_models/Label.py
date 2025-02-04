@@ -18,7 +18,7 @@ class NCLabel(IntEnum):
     labels.
     """
 
-    dermis = 0
+    dermis_subcutis = 0
     epidermis_corneum = 1
     bowens = 2
     bcc_nodular = 3
