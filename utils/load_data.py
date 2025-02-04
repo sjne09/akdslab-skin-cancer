@@ -1,6 +1,7 @@
 import json
 import os
 import pickle
+from random import randint
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -74,11 +75,42 @@ class SpecimenData:
         return specimens_by_fold
 
     def _get_specimens_by_label(self) -> Dict[int, List[str]]:
+        """
+        Returns a dict that groups specimens by label.
+
+        Returns
+        -------
+        Dict[int, List[str]]
+            A mapping of labels to specimen ids
+        """
         specimens_by_label = self.df.groupby("label").groups
         specimens_by_label = [
             list(specs) for specs in specimens_by_label.values()
         ]
         return specimens_by_label
+
+    def sample_specs(self, n: int) -> Dict[int, List[str]]:
+        """
+        Returns a random sample of n specimens for each unique label, drawn
+        without replacement.
+
+        Parameters
+        ----------
+        n : int
+            The number of samples to draw per label
+
+        Returns
+        -------
+        Dict[int, List[str]]
+            The random samples, structured as a dict with label ids as keys
+            and a list of specimen ids as values
+        """
+        sample = {i: [] for i in range(len(self.specimens_by_label))}
+        for i in range(len(self.specimens_by_label)):
+            for _ in range(n):
+                idx = randint(0, len(self.specimens_by_label[i]) - 1)
+                sample[i].append(self.specimens_by_label[i][idx])
+        return sample
 
 
 def get_label(x: pd.DataFrame) -> int:

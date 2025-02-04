@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from gigapath.preprocessing.data.foreground_segmentation import LoadROId
 from matplotlib import collections, patches
@@ -72,6 +72,48 @@ def load_slide(fpath: str) -> Dict[str, Any]:
     return sample
 
 
+def construct_rects_array(
+    tile_coords: List[Iterable[int]],
+    origin_coords: Iterable[int],
+    downscale_factor: float,
+    side_length: int = 256,
+) -> List[Tuple[int]]:
+    """
+    Constructs an array of matplotlib rectangle objects for layering over a
+    slide image. Assumes square tiles.
+
+    Parameters
+    ----------
+    tile_coords : List[Iterable[int]]
+        A list of (x, y) tile coords corresponding to tiles to visualize
+
+    origin_coords : Iterable[int]
+        (x, y) coords for the origin of the slide image
+
+    downscale_factor : float
+        Downscale factor for the slide image
+
+    side_length : int
+        Side length for the tiles. Default is 256
+
+    Returns
+    -------
+    A list of matplotlib rectangle objects corresponding to the tiles in
+    tile_coords
+    """
+    rects = []
+    for x, y in tile_coords:
+        # change coordinate to the current level from level-0
+        # tile location is in the original image coordinate, while the
+        # slide image is after selecting ROI
+        xy = (
+            (x - origin_coords[0]) / downscale_factor,
+            (y - origin_coords[1]) / downscale_factor,
+        )
+        rects.append(patches.Rectangle(xy, side_length, side_length))
+    return rects
+
+
 def plot_image(
     fpath: str,
     ax: plt.Axes,
@@ -79,25 +121,43 @@ def plot_image(
     tile_weights: Optional[List[float]] = None,
     weight_labels: Optional[Dict[str, int]] = None,
 ) -> AxesImage:
+    """
+    General-purpose slide image plotting method. Can be used to plot heatmaps
+    if weigths and labels are provided.
+
+    Parameters
+    ----------
+    fpath : str
+        The path to the image file
+
+    ax : plt.Axes
+        The axis to plot on
+
+    tile_coords : Optional[List[Iterable[int]]]
+        A list of (x, y) tile coords corresponding to tiles to visualize
+
+    tile_weights : Optional[List[float]]
+        Weights corresponding to each tile in tile_coords (must be in the
+        same order as tile_coords)
+
+    weight_labels : Optional[Dict[str, int]]
+        Labels to use in the plot legend if tile_weights are integer values
+
+    Returns
+    -------
+    AxesImage
+        The result of imshow of the slide image
+    """
     sample = load_slide(fpath)
 
     slide_image = sample["image"]
-    downscale_factor = sample["scale"]
 
     im = ax.imshow(slide_image.transpose(1, 2, 0))
 
     if tile_coords is not None:
-        rects = []
-        for x, y in tile_coords:
-            # change coordinate to the current level from level-0
-            # tile location is in the original image coordinate, while the
-            # slide image is after selecting ROI
-            xy = (
-                (x - sample["origin"][0]) / downscale_factor,
-                (y - sample["origin"][1]) / downscale_factor,
-            )
-            rects.append(patches.Rectangle(xy, 256, 256))
-
+        rects = construct_rects_array(
+            tile_coords, sample["origin"], sample["scale"]
+        )
         if tile_weights is not None:
             pc = collections.PatchCollection(rects, alpha=1, cmap="inferno")
             pc.set_array(tile_weights)
@@ -130,5 +190,49 @@ def plot_image(
                 rects, match_original=True, alpha=0.5, edgecolor="black"
             )
         ax.add_collection(pc)
+    ax.axis("off")
+    return im
+
+
+def plot_roi_tiles(
+    fpath: str,
+    ax: plt.Axes,
+    tile_coords: List[Iterable[int]],
+) -> AxesImage:
+    """
+    Visualize tiles over a slide image.
+
+    Parameters
+    ----------
+    fpath : str
+        The path to the image file
+
+    ax : plt.Axes
+        The axis to plot on
+
+    tile_coords : List[Iterable[int]]
+        A list of (x, y) tile coords corresponding to tiles to visualize
+
+    Returns
+    -------
+    AxesImage
+        The result of imshow of the slide image
+    """
+    sample = load_slide(fpath)
+
+    slide_image = sample["image"]
+    im = ax.imshow(slide_image.transpose(1, 2, 0))
+
+    rects = construct_rects_array(
+        tile_coords, sample["origin"], sample["scale"]
+    )
+
+    pc = collections.PatchCollection(
+        rects,
+        alpha=1,
+        facecolor="None",
+        edgecolor="limegreen",
+    )
+    ax.add_collection(pc)
     ax.axis("off")
     return im
