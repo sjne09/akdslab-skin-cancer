@@ -5,7 +5,7 @@ import torch
 from torch import nn
 from torchvision import transforms
 
-from models.foundation_models.FoundationModel import FoundationModel
+from models.foundation_models.fm import FoundationModel
 
 
 class UNI(FoundationModel):

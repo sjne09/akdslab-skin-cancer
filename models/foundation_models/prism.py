@@ -11,7 +11,7 @@ from torchvision import transforms
 from transformers import AutoModel
 
 from data_models.datasets import TileEncodingDataset
-from models.foundation_models.FoundationModel import FoundationModel
+from models.foundation_models.fm import FoundationModel
 
 
 class PRISM(FoundationModel):
