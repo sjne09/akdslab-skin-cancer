@@ -4,7 +4,7 @@ import torch
 from torch import nn
 
 from .abmil import GatedMILAttention, MILAttention
-from .MLP import MLP
+from .mlp import MLP
 from .pos_embedding import PositionalEmbedding
 
 
