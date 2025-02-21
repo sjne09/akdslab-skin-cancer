@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 import geojson
 import torch
-from shapely import Polygon, box, contains, intersects
+from shapely import MultiPolygon, Polygon, box, contains, intersects
 
 from utils.slide_utils import load_slide
 
@@ -23,6 +23,9 @@ class AdhocNearestCentroid:
         self.labels = labels_enum
         self.centroids: torch.Tensor = centroids
         self.mode = intersects if mode == "intersects" else contains
+
+        # tile coords for tiles within ROIs for each slide used for centroids
+        self.roi_tiles: Dict[str, Set[Tuple[int, int]]] = None
 
     def fit(
         self,
@@ -97,6 +100,7 @@ class AdhocNearestCentroid:
                 centroids.append(centroid)
 
         self.centroids = torch.stack(centroids, dim=0)
+        self.roi_tiles = roi_tiles
 
     def predict(
         self, X: torch.Tensor, mode: str = "dot_product"
@@ -139,16 +143,16 @@ class AdhocNearestCentroid:
         except KeyError:
             raise ValueError("Invalid mode selected.")
 
-    def save_model(self, output_dir: str) -> None:
+    def save_model(self, fpath: str) -> None:
         """
         Pickles the model centroids.
 
         Parameters
         ----------
-        output_dir : str
-            The directory to save the centroids to
+        fpath : str
+            The file to save the centroids to
         """
-        with open(os.path.join(output_dir, "param.pkl"), "wb") as f:
+        with open(fpath, "wb") as f:
             pickle.dump(self.centroids, f)
 
     def _extract_relevant_tiles(
@@ -256,7 +260,13 @@ class AdhocNearestCentroid:
             #  the polygon to the corresponding entry in geoms
             geoms = []
             for shape in features:
-                polygon = Polygon(shape["geometry"]["coordinates"][0])
+                if shape["geometry"]["type"] == "Polygon":
+                    polygon = Polygon(shape["geometry"]["coordinates"][0])
+                elif shape["geometry"]["type"] == "MultiPolygon":
+                    mp = []
+                    for sub_polygon in shape["geometry"]["coordinates"][0]:
+                        mp.append(Polygon(sub_polygon))
+                    polygon = MultiPolygon(mp)
                 geoms.append(polygon)
             polygons[slide_name] = geoms
 
