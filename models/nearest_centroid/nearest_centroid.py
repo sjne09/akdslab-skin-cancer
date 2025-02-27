@@ -1,14 +1,17 @@
 import os
 import pickle
 from enum import IntEnum
+from logging import Logger
 from operator import itemgetter
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 import geojson
 import torch
 from shapely import MultiPolygon, Polygon, box, contains, intersects
 
 from utils.slide_utils import load_slide
+
+logger = Logger(name="nc_log", level=10)
 
 
 class AdhocNearestCentroid:
@@ -64,6 +67,7 @@ class AdhocNearestCentroid:
             tiles_dir = roi_config["tiles_directory"]
 
             for name, pg_type in roi_config["polygon_type"].items():
+                logger.debug(name)
                 root = os.path.join(polygon_dir, name)
                 # for classes with subclasses, must use modified process
                 if pg_type == "subclass":
@@ -94,7 +98,7 @@ class AdhocNearestCentroid:
                 ) as f:
                     roi_tiles[label] = pickle.load(f)
 
-        for label in roi_tiles:
+        for label in self.labels._member_names_:
             centroid = self._create_centroid(tile_embed_dir, roi_tiles[label])
             if centroid is not None:
                 centroids.append(centroid)
@@ -190,6 +194,58 @@ class AdhocNearestCentroid:
 
         return set(relevant_tiles)
 
+    def _extract_polygon(self, coords_list: List[List[float]]) -> Polygon:
+        """
+        Extract a Polygon object from a list of coordinates.
+
+        Parameters
+        ----------
+        coords_list : List[List[float]]
+            The list of coordinates for a polygon in geojson format
+
+        Returns
+        -------
+        shapely.Polygon
+            The polygon corresponding to the provided coordinates
+        """
+        exterior = None
+        interior = []
+        for i, coords in enumerate(coords_list):
+            if i == 0:
+                exterior = coords
+            else:
+                interior.append(coords)
+        return Polygon(exterior, interior)
+
+    def _extract_shape(
+        self, shape: geojson.Feature
+    ) -> Union[MultiPolygon, Polygon]:
+        """
+        Extract a shapely shape from a geojson feature object.
+
+        Parameters
+        ----------
+        shape : geojson.Feature
+            The feature object containing the shape specifications
+
+        Returns
+        -------
+        Union[MultiPolygon, Polygon]
+            The shapely shape corresponding to the input feature
+        """
+        shape_type = shape["geometry"]["type"]
+        coords = shape["geometry"]["coordinates"]
+
+        if shape_type == "Polygon":
+            polygon = self._extract_polygon(coords)
+        elif shape_type == "MultiPolygon":
+            mp = []
+            for sub_polygon in coords:
+                mp.append(self._extract_polygon(sub_polygon))
+            polygon = MultiPolygon(mp)
+
+        return polygon
+
     def _get_subclass_polygons(
         self, root: str
     ) -> Dict[str, Dict[str, List[Polygon]]]:
@@ -222,7 +278,7 @@ class AdhocNearestCentroid:
             # the polygon to the corresponding entry in geoms
             for shape in features:
                 tissue_type = shape["properties"]["name"]
-                polygon = Polygon(shape["geometry"]["coordinates"][0])
+                polygon = self._extract_shape(shape)
 
                 if tissue_type not in polygons:
                     polygons[tissue_type] = {slide_name: [polygon]}
@@ -255,18 +311,19 @@ class AdhocNearestCentroid:
             slide_name = os.path.splitext(slide)[0]
             fpath = os.path.join(root, slide)
             features = self._get_geojson_features(fpath)
+            logger.debug(slide_name)
 
-            # for each shape in the geojson, extract the tissue type and add
-            #  the polygon to the corresponding entry in geoms
+            # for each shape in the geojson, extract the shape as a shapely
+            # object and append to list of geometries
             geoms = []
             for shape in features:
-                if shape["geometry"]["type"] == "Polygon":
-                    polygon = Polygon(shape["geometry"]["coordinates"][0])
-                elif shape["geometry"]["type"] == "MultiPolygon":
-                    mp = []
-                    for sub_polygon in shape["geometry"]["coordinates"][0]:
-                        mp.append(Polygon(sub_polygon))
-                    polygon = MultiPolygon(mp)
+                if shape["geometry"]["type"] not in {
+                    "Polygon",
+                    "MultiPolygon",
+                }:
+                    logger.debug(slide, shape)
+                    continue
+                polygon = self._extract_shape(shape)
                 geoms.append(polygon)
             polygons[slide_name] = geoms
 
@@ -427,12 +484,18 @@ class AdhocNearestCentroid:
                 os.path.join(slide_dir, f"{slide_id}.svs"),
                 os.path.join(tiles_dir, f"{slide_id}.svs"),
             )
-            for polygon in polygons:
+            for i, polygon in enumerate(polygons):
                 roi_tiles = self._extract_relevant_tiles(
                     polygon, coord_map.keys()
                 )
                 if len(roi_tiles) > 0:
-                    roi_tiles = set(itemgetter(*roi_tiles)(coord_map))
+                    modified_coords = itemgetter(*roi_tiles)(coord_map)
+                    if isinstance(modified_coords, tuple) and isinstance(
+                        modified_coords[0], int
+                    ):
+                        roi_tiles = {modified_coords}
+                    else:
+                        roi_tiles = set(modified_coords)
                     relevant_tiles[slide_id].update(roi_tiles)
 
         if output_dir is not None:
