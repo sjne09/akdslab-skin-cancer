@@ -3,16 +3,13 @@ import os
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import seaborn as sns
-from dotenv import load_dotenv
 from load_data import load_data
 from umap import UMAP
 
 from data_models.Label import Label
 
-load_dotenv()
-
-OUTPUT_DIR = os.getenv("OUTPUT_DIR")
-DATA_DIR = os.getenv("DATA_DIR")
+OUTPUT_DIR = os.environ["OUTPUT_DIR"]
+DATA_DIR = os.environ["DATA_DIR"]
 
 
 def cluster_embeds(
@@ -79,17 +76,3 @@ def cluster_embeds(
         alpha=0.5,
     )
     plt.savefig(save_path, dpi=200)
-
-
-if __name__ == "__main__":
-    label_path = os.path.join(DATA_DIR, "labels/labels.csv")
-    embedding_path = os.path.join(
-        OUTPUT_DIR, "uni/uni_pooled_slide_embeds.pkl"
-    )
-    cluster_embeds(
-        embedding_path,
-        label_path,
-        "UNI",
-        "outputs/uni/global_pooling/uni_proj.png",
-        50,
-    )

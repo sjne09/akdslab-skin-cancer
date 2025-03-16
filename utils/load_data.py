@@ -6,14 +6,12 @@ from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
-from dotenv import load_dotenv
+from torch import Tensor
 
 from data_models.Label import Label
 
-load_dotenv()
-
-OUTPUT_DIR = os.getenv("OUTPUT_DIR")
-DATA_DIR = os.getenv("DATA_DIR")
+OUTPUT_DIR = os.environ["OUTPUT_DIR"]
+DATA_DIR = os.environ["DATA_DIR"]
 
 
 class SpecimenData:
@@ -245,3 +243,15 @@ def load_data(
         df["fold"] = df["specimen_id"].map(lambda x: fold_map[x])
 
     return df
+
+
+def load_tile_embeds(slide_id: str, fm: str) -> Dict[str, Tensor]:
+    with open(
+        os.path.join(
+            OUTPUT_DIR, fm, "tile_embeddings_sorted", f"{slide_id}.pkl"
+        ),
+        "rb",
+    ) as f:
+        embeds = pickle.load(f)
+
+    return embeds

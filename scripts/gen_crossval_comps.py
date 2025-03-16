@@ -1,6 +1,10 @@
 import pandas as pd
 
-from utils.compare_results import boxplots, signed_rank, signed_rank_summary
+from evaluation.compare_results import (
+    boxplots,
+    signed_rank,
+    signed_rank_summary,
+)
 
 auroc_keys = [k + "_auroc" for k in ["benign", "bowens", "bcc", "scc"]]
 auprc_keys = [k + "_auprc" for k in ["benign", "bowens", "bcc", "scc"]]

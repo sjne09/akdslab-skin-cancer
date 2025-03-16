@@ -4,11 +4,11 @@ import os
 import numpy as np
 import pandas as pd
 
-DATA_ROOT = "/opt/gpudata/skin-cancer"
+DATA_DIR = os.environ["DATA_DIR"]
 NUM_FOLDS = 5
 
 # load data, add label column based three label cols
-df = pd.read_csv(os.path.join(DATA_ROOT, "data/labels/labels.csv"))
+df = pd.read_csv(os.path.join(DATA_DIR, "labels/labels.csv"))
 df["specimenid"] = df["specimenid"].astype("string")
 df["patientid"] = df["patientid"].astype("string")
 df["label"] = pd.from_dummies(
@@ -19,7 +19,7 @@ df["label"] = pd.from_dummies(
 pat_to_specs = {k: set() for k in df["patientid"].unique()}
 unmatched = set()  # track specimens that are not in the label data
 
-for slide in os.listdir(os.path.join(DATA_ROOT, "data/tiles/output")):
+for slide in os.listdir(os.path.join(DATA_DIR, "tiles/output")):
     if slide.endswith(".svs"):
         specimen_id = slide[:6]
         res = df.loc[df["specimenid"] == specimen_id]
@@ -78,5 +78,5 @@ for i, fold in enumerate(folds):
     for pat in fold:
         spec_folds[i].extend(list(pat_to_specs[pat]))
 
-with open(os.path.join(DATA_ROOT, "data/folds.json"), "w") as f:
+with open(os.path.join(DATA_DIR, "folds.json"), "w") as f:
     json.dump(spec_folds, f)

@@ -28,6 +28,7 @@ repos:
       rev: 7.1.1
       hooks:
       -   id: flake8
+          args: [--per-file-ignores=models/__init__.py:F401]
 
 # sets up .pre-commit-ci.yaml to ensure pre-commit dependencies stay up to date
 ci:

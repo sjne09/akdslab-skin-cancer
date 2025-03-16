@@ -1,30 +1,37 @@
 import os
 import pickle
 from enum import IntEnum
-from logging import Logger
 from operator import itemgetter
 from typing import Dict, List, Optional, Set, Tuple, Union
 
-import geojson
 import torch
-from shapely import MultiPolygon, Polygon, box, contains, intersects
+from shapely import Polygon, contains, intersects
 
-from utils.slide_utils import load_slide
+from .coords import map_coords
+from .roi import (
+    extract_relevant_tiles,
+    get_class_polygons,
+    get_roi_embeds,
+    get_subclass_polygons,
+)
 
-logger = Logger(name="nc_log", level=10)
 
-
-class AdhocNearestCentroid:
+class NearestCentroid:
     def __init__(
         self,
         labels_enum: IntEnum,
-        centroids: Optional[torch.Tensor] = None,
+        centroids: Optional[Union[torch.Tensor, os.PathLike, str]] = None,
         mode: str = "intersects",
     ) -> None:
         if mode not in {"intersects", "contains"}:
             raise ValueError("mode must be either 'intersects' or 'contains'")
         self.labels = labels_enum
-        self.centroids: torch.Tensor = centroids
+
+        if isinstance(centroids, os.PathLike):
+            self.load_model(centroids)
+        else:
+            self.centroids: torch.Tensor = centroids
+
         self.mode = intersects if mode == "intersects" else contains
 
         # tile coords for tiles within ROIs for each slide used for centroids
@@ -67,11 +74,10 @@ class AdhocNearestCentroid:
             tiles_dir = roi_config["tiles_directory"]
 
             for name, pg_type in roi_config["polygon_type"].items():
-                logger.debug(name)
                 root = os.path.join(polygon_dir, name)
                 # for classes with subclasses, must use modified process
                 if pg_type == "subclass":
-                    pgs = self._get_subclass_polygons(root)
+                    pgs = get_subclass_polygons(root)
                     for label, polygons in pgs.items():
                         roi_tiles[label] = self._roi_tiles_by_slide(
                             polygon_map=polygons,
@@ -82,7 +88,7 @@ class AdhocNearestCentroid:
                             or None,
                         )
                 else:
-                    polygons = self._get_class_polygons(root)
+                    polygons = get_class_polygons(root)
                     roi_tiles[name] = self._roi_tiles_by_slide(
                         polygon_map=polygons,
                         slide_dir=slide_dir,
@@ -122,6 +128,9 @@ class AdhocNearestCentroid:
             Options are:
                 "dot_product": the raw dot products of the rows of X and the
                 centroids
+                "modified_dot": the negative absolute value of the dot
+                products of the rows of X and the centroids less the squared
+                of the centroids
                 "euclidean": the euclidean distance between the rows of X and
                 the centroids
                 "cosine": the cosine similarity between rows of X and the
@@ -138,6 +147,7 @@ class AdhocNearestCentroid:
 
         modes = {
             "dot_product": self._dot_product,
+            "modified_dot": self._modified_dot_product,
             "euclidean": self._euclidean_distance,
             "cosine": self._cosine_similarity,
         }
@@ -159,286 +169,17 @@ class AdhocNearestCentroid:
         with open(fpath, "wb") as f:
             pickle.dump(self.centroids, f)
 
-    def _extract_relevant_tiles(
-        self,
-        polygon: Polygon,
-        coords: List[Tuple[int, int]],
-        tile_size: int = 256,
-    ) -> Set[Tuple[int, int]]:
+    def load_model(self, path: str) -> None:
         """
-        Determines which tiles from the list of tile coordinates intersect the
-        polygon and returns the list of relevant tiles as a set.
+        Load pickled centroids.
 
         Parameters
         ----------
-        polygon : shapely.Polygon
-            The polygon to use as a bounding box
-
-        coords : List[Tuple[int, int]]
-            A list containing (x, y) coordinate tuples
-
-        tile_size : int
-            The tile size
-
-        Returns
-        -------
-        Set[Tuple[int, int]]
-            Relevant tiles that intersect the polygon
+        path : str
+            Path to pickled centroids
         """
-        relevant_tiles = []
-        for xmin, ymin in coords:
-            xmax, ymax = xmin + tile_size, ymin + tile_size
-            tile = box(xmin, ymin, xmax, ymax)
-            if self.mode(polygon, tile):
-                relevant_tiles.append((xmin, ymin))
-
-        return set(relevant_tiles)
-
-    def _extract_polygon(self, coords_list: List[List[float]]) -> Polygon:
-        """
-        Extract a Polygon object from a list of coordinates.
-
-        Parameters
-        ----------
-        coords_list : List[List[float]]
-            The list of coordinates for a polygon in geojson format
-
-        Returns
-        -------
-        shapely.Polygon
-            The polygon corresponding to the provided coordinates
-        """
-        exterior = None
-        interior = []
-        for i, coords in enumerate(coords_list):
-            if i == 0:
-                exterior = coords
-            else:
-                interior.append(coords)
-        return Polygon(exterior, interior)
-
-    def _extract_shape(
-        self, shape: geojson.Feature
-    ) -> Union[MultiPolygon, Polygon]:
-        """
-        Extract a shapely shape from a geojson feature object.
-
-        Parameters
-        ----------
-        shape : geojson.Feature
-            The feature object containing the shape specifications
-
-        Returns
-        -------
-        Union[MultiPolygon, Polygon]
-            The shapely shape corresponding to the input feature
-        """
-        shape_type = shape["geometry"]["type"]
-        coords = shape["geometry"]["coordinates"]
-
-        if shape_type == "Polygon":
-            polygon = self._extract_polygon(coords)
-        elif shape_type == "MultiPolygon":
-            mp = []
-            for sub_polygon in coords:
-                mp.append(self._extract_polygon(sub_polygon))
-            polygon = MultiPolygon(mp)
-
-        return polygon
-
-    def _get_subclass_polygons(
-        self, root: str
-    ) -> Dict[str, Dict[str, List[Polygon]]]:
-        """
-        Get polygons for slides containing a subclass in the shape's
-        ["properties"]["name"] object. Returns a dict with keys for each
-        subclass and dict values with slide ids as keys and a list of
-        polygons as values.
-
-        Parameters
-        ----------
-        root : str
-            The directory containing geojson files for a particular class.
-            Each geojson should contain polygon data for a single slide
-
-        Returns
-        -------
-        Dict[str, Dict[str, List[Polygon]]]
-            A dict with keys for each subclass and dict values with slide ids
-            as keys and a list of polygons as values
-        """
-        # for each slide in the sampled specimen
-        polygons = {}
-        for slide in os.listdir(root):
-            slide_name = os.path.splitext(slide)[0]
-            fpath = os.path.join(root, slide)
-            features = self._get_geojson_features(fpath)
-
-            # for each shape in the geojson, extract the tissue type and add
-            # the polygon to the corresponding entry in geoms
-            for shape in features:
-                tissue_type = shape["properties"]["name"]
-                polygon = self._extract_shape(shape)
-
-                if tissue_type not in polygons:
-                    polygons[tissue_type] = {slide_name: [polygon]}
-                elif slide_name not in polygons[tissue_type]:
-                    polygons[tissue_type][slide_name] = [polygon]
-                else:
-                    polygons[tissue_type][slide_name].append(polygon)
-        return polygons
-
-    def _get_class_polygons(self, root: str) -> Dict[str, List[Polygon]]:
-        """
-        Get polygons for slides of a certain class. Returns a dict with slide
-        ids as keys and a list of polygons as values.
-
-        Parameters
-        ----------
-        root : str
-            The directory containing geojson files for a particular class.
-            Each geojson should contain polygon data for a single slide
-
-        Returns
-        -------
-        Dict[str, List[Polygon]]
-            A dict with slide ids as keys and a list of polygons as values
-        """
-        polygons = {}
-        for slide in os.listdir(root):
-            if not slide.endswith(".geojson"):
-                continue
-            slide_name = os.path.splitext(slide)[0]
-            fpath = os.path.join(root, slide)
-            features = self._get_geojson_features(fpath)
-            logger.debug(slide_name)
-
-            # for each shape in the geojson, extract the shape as a shapely
-            # object and append to list of geometries
-            geoms = []
-            for shape in features:
-                if shape["geometry"]["type"] not in {
-                    "Polygon",
-                    "MultiPolygon",
-                }:
-                    logger.debug(slide, shape)
-                    continue
-                polygon = self._extract_shape(shape)
-                geoms.append(polygon)
-            polygons[slide_name] = geoms
-
-        return polygons
-
-    def _get_geojson_features(
-        self, fpath: str
-    ) -> List[geojson.feature.Feature]:
-        """
-        Get the features contained in a geojson file.
-
-        Parameters
-        ----------
-        fpath : str
-            The path to the geojson file
-
-        Returns
-        -------
-        List[geojson.feature.Feature]
-            A list of features
-        """
-        with open(fpath, "r") as f:
-            data = geojson.load(f)
-            if not isinstance(data, list):
-                data = [data]
-        return data
-
-    def _get_tile_coords(self, tiles_path: str) -> List[Tuple[int, int]]:
-        """
-        Gets coordinates from file names contained in tiles_path.
-
-        Parameters
-        ----------
-        tiles_path : str
-            Path to a directory containing slide tiles
-
-        Returns
-        -------
-        List[Tuple[int, int]]
-            Coordinates for all tiles in tiles_path in (x, y) pairs
-        """
-        tiles = [
-            tile[:-4]
-            for tile in os.listdir(tiles_path)
-            if tile.endswith(".png")
-        ]
-
-        coords = []
-        for tile in tiles:
-            x, y = tile.split("_")
-            x, y = int(x.replace("x", "")), int(y.replace("y", ""))
-            coords.append((x, y))
-        return coords
-
-    def _calculate_original_coords(
-        self,
-        coords: Tuple[int, int],
-        origin: Tuple[int, int],
-        downscale_factor: float,
-    ) -> Tuple[int, int]:
-        """
-        Converts coords from a processed WSI to coords on the original WSI.
-
-        Parameters
-        ----------
-        coords : Tuple[int, int]
-            Coords to convert
-
-        origin : Tuple[int, int]
-            The coordinates of the origin for the processed slide
-
-        downscale_factor : float
-            The downscale factor for the processed slide
-
-        Returns
-        -------
-        Tuple[int, int]
-            The coordinates to convert
-        """
-        return (
-            int((coords[0] - origin[0]) / downscale_factor),
-            int((coords[1] - origin[1]) / downscale_factor),
-        )
-
-    def _map_coords(
-        self, slide_path: str, tiles_path: str
-    ) -> Dict[Tuple[int, int], Tuple[int, int]]:
-        """
-        Maps tile coords from the original WSI to coords for the tiles
-        derived from a processed slide
-
-        Parameters
-        ----------
-        slide_path : str
-            Path to the original WSI
-
-        tiles_path : str
-            Path to the directory containing tiles corresponding to the WSI
-
-        Returns
-        -------
-        Dict[Tuple[int, int], Tuple[int, int]]
-            A mapping of original coordinates to coordinates of tiles from
-            the processed WSI
-        """
-        img = load_slide(slide_path)
-        coords = self._get_tile_coords(tiles_path)
-        # map the original coords to the modified coords
-        coord_mapping = {
-            self._calculate_original_coords(
-                pair, img["origin"], img["scale"]
-            ): pair
-            for pair in coords
-        }
-        return coord_mapping
+        with open(path, "rb") as f:
+            self.centroids = pickle.load(f)
 
     def _roi_tiles_by_slide(
         self,
@@ -480,13 +221,13 @@ class AdhocNearestCentroid:
         relevant_tiles = {}
         for slide_id, polygons in polygon_map.items():
             relevant_tiles[slide_id] = set()
-            coord_map = self._map_coords(
+            coord_map = map_coords(
                 os.path.join(slide_dir, f"{slide_id}.svs"),
                 os.path.join(tiles_dir, f"{slide_id}.svs"),
             )
             for i, polygon in enumerate(polygons):
-                roi_tiles = self._extract_relevant_tiles(
-                    polygon, coord_map.keys()
+                roi_tiles = extract_relevant_tiles(
+                    polygon, coord_map.keys(), self.mode
                 )
                 if len(roi_tiles) > 0:
                     modified_coords = itemgetter(*roi_tiles)(coord_map)
@@ -506,45 +247,9 @@ class AdhocNearestCentroid:
 
         return relevant_tiles
 
-    def _get_roi_embeds(
-        self,
-        tile_embeds: Dict[str, torch.Tensor],
-        roi_tiles: Set[Tuple[int, int]],
-    ) -> List[torch.Tensor]:
-        """
-        Returns a list of tile embedding vectors for the tiles contained in
-        roi_tiles.
-
-        Parameters
-        ----------
-        tile_embeds : Dict[str, torch.Tensor]
-            The tile embedding dict for a single slide. Must have keys
-            "tile_embeds" and "coords" containing tensors with model embeddings
-            and tile coordinates
-
-        roi_tiles : Set[Tuple[int, int]]
-            The (x, y) coordinate pairs identifying tiles in the ROI to extract
-            embeddings for
-
-        Returns
-        -------
-        List[torch.Tensor]
-            A list of tile embedding vectors
-        """
-        if len(roi_tiles) == 0:
-            return []
-
-        idxs = []
-        for i, coords in enumerate(tile_embeds["coords"]):
-            pair = coords[0].item(), coords[1].item()
-            if pair in roi_tiles:
-                idxs.append(i)
-
-        roi_embeds = list(itemgetter(*idxs)(tile_embeds["tile_embeds"]))
-        return roi_embeds
-
+    @staticmethod
     def _create_centroid(
-        self, tile_embeds_path: str, roi_tiles: Dict[str, Set[Tuple[int, int]]]
+        tile_embeds_path: str, roi_tiles: Dict[str, Set[Tuple[int, int]]]
     ) -> torch.Tensor:
         """
         Create a centroid vector from the embeddings for the tiles with coords
@@ -572,22 +277,77 @@ class AdhocNearestCentroid:
                 os.path.join(tile_embeds_path, f"{slide}.pkl"), "rb"
             ) as f:
                 embeds = pickle.load(f)
-            cluster.extend(self._get_roi_embeds(embeds, roi_tiles[slide]))
+            cluster.extend(get_roi_embeds(embeds, roi_tiles[slide]))
 
         if cluster:
-            return torch.stack(cluster, dim=0).mean(dim=0).float()
+            return torch.stack(cluster, dim=0).float().mean(dim=0)
         return None
 
     def _dot_product(self, X: torch.Tensor) -> torch.Tensor:
+        """
+        Calculates the dot product between each row of X and each of
+        the model's centroids.
+
+        Parameters
+        ----------
+        X : torch.Tensor
+            A 2-dimensional tensor of shape [N, d_model] where d_model
+            is the dimension of the centroid vectors
+
+        Returns
+        -------
+        torch.Tensor
+            A 2-dimensional tensor of shape [N, C] containing the dot
+            products between the rows of X and each of the centroids
+        """
         return X @ self.centroids.T
 
+    def _modified_dot_product(self, X: torch.Tensor) -> torch.Tensor:
+        dp = self._dot_product(X)
+        centroids_dot = torch.diagonal(self._dot_product(self.centroids))
+        return -(dp - centroids_dot).abs()
+
     def _cosine_similarity(self, X: torch.Tensor) -> torch.Tensor:
+        """
+        Calculates the cosine similarity between each row of X and each
+        of the model's centroids.
+
+        Parameters
+        ----------
+        X : torch.Tensor
+            A 2-dimensional tensor of shape [N, d_model] where d_model
+            is the dimension of the centroid vectors
+
+        Returns
+        -------
+        torch.Tensor
+            A 2-dimensional tensor of shape [N, C] containing the cos
+            similarities between the rows of X and each of the
+            centroids
+        """
         dp = self._dot_product(X)
         X_norm = torch.norm(X, dim=-1, keepdim=True)
         centroid_norm = torch.norm(self.centroids, dim=-1, keepdim=True)
         return dp / (X_norm @ centroid_norm.T)
 
     def _euclidean_distance(self, X: torch.Tensor) -> torch.Tensor:
+        """
+        Calculates the euclidean distance between each row of X and each
+        of the model's centroids.
+
+        Parameters
+        ----------
+        X : torch.Tensor
+            A 2-dimensional tensor of shape [N, d_model] where d_model
+            is the dimension of the centroid vectors
+
+        Returns
+        -------
+        torch.Tensor
+            A 2-dimensional tensor of shape [N, C] containing the
+            euclidean distances between the rows of X and each of the
+            centroids
+        """
         # reshape to enable broadcasting
         X_expanded = X.unsqueeze(1)
         centroids_expanded = self.centroids.unsqueeze(0)
@@ -596,15 +356,3 @@ class AdhocNearestCentroid:
         squared_diff = (X_expanded - centroids_expanded) ** 2
         sum_squared_diff = squared_diff.sum(dim=-1)
         return torch.sqrt(sum_squared_diff)
-
-    def load_model(self, path: str) -> None:
-        """
-        Load pickled centroids.
-
-        Parameters
-        ----------
-        path : str
-            Path to pickled centroids
-        """
-        with open(path, "rb") as f:
-            self.centroids = pickle.load(f)

@@ -1,0 +1,14 @@
+{
+    "annotation_directory": "",
+    "slide_directory": "",
+    "tiles_directory": "",
+    "roi_tiles_output_directory": "",
+    "polygon_type": {
+        "bcc_nodular": "class",
+        "bcc_superficial": "class",
+        "bowens": "class",
+        "scc": "class",
+        "normal": "subclass",
+        "artifact": "class"
+    }
+}

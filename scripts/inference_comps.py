@@ -1,13 +1,9 @@
 import os
 
-from dotenv import load_dotenv
-
 from data_models.Label import Label
-from utils.compare_results import inference_comparison
+from evaluation.compare_results import inference_comparison
 
-load_dotenv()
-
-OUTPUT_DIR = os.getenv("OUTPUT_DIR")
+OUTPUT_DIR = os.environ["OUTPUT_DIR"]
 
 # define paths to the preds for the models to be compared
 models = ["prism", "uni", "gigapath"]

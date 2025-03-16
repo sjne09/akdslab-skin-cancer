@@ -47,44 +47,8 @@ class PositionalEmbedding(nn.Module):
         return torch.cat((y_embed, x_embed), dim=-1)
 
 
-class PositionalEmbeddingAlt(nn.Module):
-    """
-    2D sinusoidal positional embeddings. Uses mean of 1D embeddings for x
-    and y.
-    """
-
-    def __init__(self, embed_dim: int, max_len: int = 500) -> None:
-        super().__init__()
-        position = torch.arange(max_len).unsqueeze(1)
-
-        div_term = torch.exp(
-            torch.arange(0, embed_dim, 2) * (-log(10000.0) / embed_dim)
-        )
-
-        pe = torch.zeros(max_len, embed_dim)
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        self.register_buffer("pe", pe)
-
-    def forward(self, coords: torch.Tensor) -> torch.Tensor:
-        """
-        Parameters
-        ----------
-        coords : torch.Tensor
-            Tile cartesian coordinates, shape (B, S, 2) or (N, 2)
-
-        Returns
-        -------
-        torch.Tensor
-            Positional embeddings for the input coords
-        """
-        x_embed = self.pe[coords[..., 0]]
-        y_embed = self.pe[coords[..., 1]]
-        return torch.stack((y_embed, x_embed), dim=0).mean(dim=0)
-
-
 def get_position_ranks(
-    x: Union[np.ndarray, torch.Tensor]
+    x: Union[np.ndarray, torch.Tensor],
 ) -> Union[np.ndarray, torch.Tensor]:
     """
     Get position ranks from coordinates.
@@ -137,9 +101,14 @@ def _get_position_ranks_np(x: np.ndarray) -> np.ndarray:
     counts = np.diff(indices, append=y.size)
     ranks = np.cumsum(i, axis=-1)[i]
 
+    # expand the ranks to the full size of the input
     ranks = np.repeat(ranks, counts).reshape(x.shape)
     ordered_ranks = np.empty(j.shape, dtype=ranks.dtype)
+
+    # place ranks in the correct positions
     np.put_along_axis(ordered_ranks, j, ranks, axis=-1)
+
+    # zero indexing
     return ordered_ranks - 1
 
 
@@ -187,4 +156,5 @@ def _get_position_ranks_torch(x: torch.Tensor) -> torch.Tensor:
     # place ranks in the correct positions
     ordered_ranks.scatter_(-1, j, ranks)
 
+    # zero indexing
     return ordered_ranks - 1

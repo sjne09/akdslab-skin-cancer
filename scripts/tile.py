@@ -4,8 +4,6 @@ from multiprocessing import Manager, Process, Queue
 
 from gigapath.pipeline import tile_one_slide
 
-DATA_ROOT = "/opt/gpudata/skin-cancer"
-
 
 def tile(id: int, q: Queue, dest_root: str, overwrite: bool = False) -> None:
     """
@@ -65,14 +63,16 @@ def main():
     Populates the job queue with file paths and spawns processes to pull from
     the queue.
     """
+    data_dir = os.environ["DATA_DIR"]
+
     m = Manager()
     q = (
         m.Queue()
     )  # not a joinablequeue to avoid processes being killed prematurely
     num_threads = 12
 
-    src_root = os.path.join(DATA_ROOT, "data/slides")
-    dest_root = os.path.join(DATA_ROOT, "data/tiles")
+    src_root = os.path.join(data_dir, "data/slides")
+    dest_root = os.path.join(data_dir, "data/tiles")
 
     # add all the filenames to the queue + sentinels
     for dname, _, fnames in os.walk(src_root):

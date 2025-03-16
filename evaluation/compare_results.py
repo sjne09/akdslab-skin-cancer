@@ -12,6 +12,27 @@ from data_models.Label import Label
 def signed_rank(
     grouped_data: DataFrameGroupBy, columns: List[str]
 ) -> pd.DataFrame:
+    """
+    Performs a paired wilcoxon signed rank test on each pair of groups
+    in the DataFrameGroupBy object. Tests are one-sided with an
+    alt hypothesis that the first group is greater than the second
+    group.
+
+    Parameters
+    ----------
+    grouped_data : DataFrameGroupBy
+        The grouped data to perform the tests on. Tests will be
+        performed on all (n choose 2) group pairings
+
+    columns : List[str]
+        The columns in the input data that contain the metrics to
+        perform the tests on
+
+    Returns
+    -------
+    pd.DataFrame
+        The results of the paired wilcoxon signed rank tests
+    """
     groups = list(grouped_data.groups.keys())
     results = []
 
@@ -51,10 +72,32 @@ def boxplots(
     title: str,
     save_name: str,
 ) -> None:
+    """
+    Generates boxplots for each group in a DataFrameGroupBy object and
+    saves the final figure.
+
+    Parameters
+    ----------
+    grouped_data : DataFrameGroupBy
+        The grouped experiment data to create boxplots for. Data should
+        be grouped by tile encoder/foundation model), slide encoder/
+        aggregator, and classifier
+
+    columns : List[str]
+        The columns in the grouped dataframe containing the metrics to
+        create the boxplots on
+
+    title : str
+        The figure title
+
+    save_name : str
+        The output path for the boxplot figure
+    """
     groups = list(grouped_data.groups.keys())
 
     # first, flatten the data such that we have a vector of results for each
-    # (model, aggregator, clf) combination
+    # (model, aggregator, clf) combination; necessary because there are
+    # multiple rows of data for each combo given crossval
     flattened_data = {}
     for group in groups:
         flattened_data[group] = (
@@ -74,6 +117,21 @@ def boxplots(
 
 
 def signed_rank_summary(data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Uses the results of paired wilcoxon signed rank tests to yield a
+    summary of how many pairs a particular experiment performed greater
+    than, equal to, or less than.
+
+    Parameters
+    ----------
+    data : pd.DataFrame
+        The wilcoxon signed rank test results
+
+    Returns
+    -------
+    pd.DataFrame
+        The summarized results
+    """
     group_results = {}
     groups = np.unique(
         np.concat((data["group1"].unique(), data["group2"].unique()))
