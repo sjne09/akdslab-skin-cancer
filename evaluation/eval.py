@@ -1,9 +1,11 @@
 from enum import IntEnum
 from math import ceil
-from typing import Dict, List, Tuple
+from operator import itemgetter
+from typing import Any, Dict, List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from sklearn.metrics import PrecisionRecallDisplay, RocCurveDisplay, auc
 
 TYPE_CONFIG = {
@@ -41,7 +43,14 @@ class Evaluator:
     A class for evaluating cross validated classifiers.
     """
 
-    def __init__(self, labels: IntEnum) -> None:
+    def __init__(
+        self,
+        labels: IntEnum,
+        foundation_model: str,
+        aggregator: str,
+        classifier: str,
+        onehot_labels: Dict[str, np.ndarray],
+    ) -> None:
         """
         Initializes an Evaluator by creating dictionaries to store
         intermediate results and axes to plot results on.
@@ -50,8 +59,25 @@ class Evaluator:
         ----------
         labels : IntEnum
             The labels used for classification
+
+        foundation_model : str
+            The foundation model used in the experiment
+
+        aggregator : str
+            The aggregator used in the experiment
+
+        classifier : str
+            The classifier used in the experiment
+
+        onehot_labels : Dict[str, np.ndarray]
+            The onehot labels for each specimen, where the keys are
+            specimen ids and values are the onehot labels
         """
         self.labels = labels
+        self.foundation_model = foundation_model
+        self.aggregator = aggregator
+        self.classifier = classifier
+        self.onehot_labels = onehot_labels
 
         # dictionaries to keep eval curve results for each label
         self.tprs = {label: [] for label in labels._member_names_}
@@ -67,31 +93,53 @@ class Evaluator:
         self.roc_fig, self.roc_axs = plt.subplots(r, 2, figsize=(6 * r, 12))
         self.prc_fig, self.prc_axs = plt.subplots(r, 2, figsize=(6 * r, 12))
 
+        # create empty results dataframe
+        self.auroc_keys = [k + "_auroc" for k in labels._member_names_]
+        self.auprc_keys = [k + "_auprc" for k in labels._member_names_]
+        self.results = pd.DataFrame(
+            columns=["foundation_model", "aggregator", "classifier", "fold"]
+            + self.auroc_keys
+            + self.auprc_keys
+        )
+
     def fold(
         self,
-        probs: np.ndarray,
-        labels_onehot: np.ndarray,
         fold_idx: int,
+        model_data: Dict[str, Any],
         num_folds: int,
     ) -> None:
         """
         Plot results from a single fold on the relevant axes and store results
-        in class attribute dicts.
+        in class attribute dicts. Also updates the results dataframe.
 
         Parameters
         ----------
-        probs : np.ndarray
-            Probabilities for each class, shape (N, C)
+        foundation_model : str
+            The foundation model used in the experiment
 
-        labels_onehot : np.ndarray
-            Onehot labels, shape (N, C)
+        aggregator : str
+            The aggregator used in the
+
+        classifier : str
+            The classifier used in the experiment
 
         fold_idx : int
             The index of the current fold being evaluated (0-indexed)
 
+        model_data : Dict[str, Any]
+            The best model data from the current fold. Includes the ids
+            of the slides in the validation set (key 'ids'), the model
+            outputs (key 'probs' - shape (N, C)) and the ground-truth
+            labels (key 'labels')
+
         num_folds : int
             The total number of folds being evaluated
         """
+        ids, probs = self.get_spec_level_probs(
+            model_data["ids"], model_data["probs"]
+        )
+        labels_onehot = np.array(itemgetter(*ids)(self.onehot_labels))
+
         # for each predicted class, plot the current classifier's eval
         # and retain relevant data in dicts
         for j, class_of_interest in enumerate(self.labels._member_names_):
@@ -118,6 +166,41 @@ class Evaluator:
             )
             self.precisions[class_of_interest].append(interp_precision)
             self.aps[class_of_interest].append(average_precision)
+
+        # update results dataframe
+        self._update_results(fold_idx)
+
+    def _update_results(self, fold_idx: int) -> None:
+        """
+        Appends the results of the current fold to the results dataframe.
+
+        Parameters
+        ----------
+        fold_idx : int
+            The index of the current fold being evaluated (0-indexed)
+        """
+        # build results dict
+        auroc_dict = {
+            self.auroc_keys[i]: self.aucs[label][-1]
+            for i, label in enumerate(self.labels._member_names_)
+        }
+        auprc_dict = {
+            self.auprc_keys[i]: self.aps[label][-1]
+            for i, label in enumerate(self.labels._member_names_)
+        }
+        model_details = {
+            "foundation_model": self.foundation_model,
+            "aggregator": self.aggregator,
+            "classifier": self.classifier,
+            "fold": fold_idx,
+        }
+        model_details = model_details | auroc_dict | auprc_dict
+
+        # combine results with previous results
+        details_df = pd.Series(model_details)
+        self.results = pd.concat(
+            [self.results, details_df.to_frame().T], ignore_index=True
+        )
 
     def finalize(self, class_frequencies: Dict[str, float]) -> None:
         """

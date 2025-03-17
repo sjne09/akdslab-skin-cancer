@@ -6,7 +6,7 @@ import pandas as pd
 from pandas.core.groupby import DataFrameGroupBy
 from scipy.stats import wilcoxon
 
-from data_models.Label import Label
+from data_processing.label import Label
 
 
 def signed_rank(

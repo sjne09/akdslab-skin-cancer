@@ -10,7 +10,7 @@ from torch.nn import functional as F
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 
-from utils.tile_embed_postproc import add_positions
+from data_processing.tile_embed_postproc import add_positions
 
 
 class SlideEncodingDataset(Dataset):
@@ -35,6 +35,17 @@ class SlideEncodingDataset(Dataset):
         """
         self.tile_embed_paths = tile_embed_paths
         self.labels = labels
+
+    @classmethod
+    def from_slide_ids(
+        cls, slide_ids: List[str], labels: Dict[str, int], tile_embed_dir: str
+    ):
+        # build tile_embed_paths from slide_ids + tile_embed_dir
+        tile_embed_paths = [
+            os.path.join(tile_embed_dir, f"{slide_id}.pkl")
+            for slide_id in slide_ids
+        ]
+        return cls(tile_embed_paths, labels)
 
     def __len__(self) -> int:
         """
@@ -365,7 +376,7 @@ class SubsetRandomSampler(torch.utils.data.Sampler):
 
 
 def collate_tiles(
-    batch: List[Dict[str, torch.Tensor]]
+    batch: List[Dict[str, torch.Tensor]],
 ) -> Dict[str, torch.Tensor]:
     """
     Custom collate function for loading tiles for use with ResNet18 + ABMIL.

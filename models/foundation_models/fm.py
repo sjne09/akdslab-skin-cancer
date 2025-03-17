@@ -7,7 +7,7 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
-from data_models.datasets import TileEncodingDataset
+from data_processing.datasets import TileEncodingDataset
 
 
 class FoundationModel(ABC):

@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from torch import Tensor
 
-from data_models.Label import Label
+from data_processing.label import Label
 
 OUTPUT_DIR = os.environ["OUTPUT_DIR"]
 DATA_DIR = os.environ["DATA_DIR"]

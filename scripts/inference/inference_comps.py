@@ -1,6 +1,6 @@
 import os
 
-from data_models.Label import Label
+from data_processing.label import Label
 from evaluation.compare_results import inference_comparison
 
 OUTPUT_DIR = os.environ["OUTPUT_DIR"]

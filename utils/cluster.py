@@ -3,10 +3,9 @@ import os
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import seaborn as sns
+from data_models.label import Label
 from load_data import load_data
 from umap import UMAP
-
-from data_models.Label import Label
 
 OUTPUT_DIR = os.environ["OUTPUT_DIR"]
 DATA_DIR = os.environ["DATA_DIR"]

@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from transformers import AutoModel
 
-from data_models.datasets import TileEncodingDataset
+from data_processing.datasets import TileEncodingDataset
 from models.foundation_models.fm import FoundationModel
 
 
