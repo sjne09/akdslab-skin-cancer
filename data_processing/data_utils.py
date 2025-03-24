@@ -1,7 +1,5 @@
 import json
-import os
 import pickle
-from random import randint
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -9,106 +7,6 @@ import pandas as pd
 from torch import Tensor
 
 from data_processing.label import Label
-
-OUTPUT_DIR = os.environ["OUTPUT_DIR"]
-DATA_DIR = os.environ["DATA_DIR"]
-
-
-class SpecimenData:
-    def __init__(
-        self, label_path: str, fold_path: Optional[str] = None
-    ) -> None:
-        df = load_data(label_path=label_path, fold_path=fold_path)
-        self.df = df.set_index("specimen_id")
-        self.specimens = list(self.df.index)
-        self.onehot_labels = self._get_onehot_labels()
-        self.labels = self._get_labels()
-        self.specimens_by_label = self._get_specimens_by_label()
-        if fold_path is not None:
-            self.specimens_by_fold = self._get_specimens_by_fold()
-
-    def _get_onehot_labels(self) -> Dict[str, np.ndarray]:
-        """
-        Returns a dictionary of specimen ids to one-hot encoded labels.
-
-        Returns
-        -------
-        Dict[str, np.ndarray]
-            A dictionary of specimen ids to one-hot encoded labels
-        """
-        onehot_labels = self.df[Label._member_names_].to_dict(
-            orient="split", index=True
-        )
-        onehot_labels = {
-            k: np.array(onehot_labels["data"][i])
-            for i, k in enumerate(onehot_labels["index"])
-        }
-        return onehot_labels
-
-    def _get_labels(self) -> Dict[str, int]:
-        """
-        Returns a dictionary of specimen ids to label indices.
-
-        Returns
-        -------
-        Dict[str, int]
-            A dictionary of specimen ids to label indices
-        """
-        labels = {row.name: int(row["label"]) for _, row in self.df.iterrows()}
-        return labels
-
-    def _get_specimens_by_fold(self) -> List[List[str]]:
-        """
-        Returns a list of lists of specimen ids, grouped by fold index.
-
-        Returns
-        -------
-        List[List[str]]
-            A list of lists of specimen ids, grouped by fold index
-        """
-        specimens_by_fold = self.df.groupby("fold").groups
-        specimens_by_fold = [
-            list(specs) for specs in specimens_by_fold.values()
-        ]
-        return specimens_by_fold
-
-    def _get_specimens_by_label(self) -> Dict[int, List[str]]:
-        """
-        Returns a dict that groups specimens by label.
-
-        Returns
-        -------
-        Dict[int, List[str]]
-            A mapping of labels to specimen ids
-        """
-        specimens_by_label = self.df.groupby("label").groups
-        specimens_by_label = [
-            list(specs) for specs in specimens_by_label.values()
-        ]
-        return specimens_by_label
-
-    def sample_specs(self, n: int) -> Dict[int, List[str]]:
-        """
-        Returns a random sample of n specimens for each unique label, drawn
-        without replacement.
-
-        Parameters
-        ----------
-        n : int
-            The number of samples to draw per label
-
-        Returns
-        -------
-        Dict[int, List[str]]
-            The random samples, structured as a dict with label ids as keys
-            and a list of specimen ids as values
-        """
-        sample = {i: [] for i in range(len(self.specimens_by_label))}
-        for i in range(len(self.specimens_by_label)):
-            for _ in range(n):
-                idx = randint(0, len(self.specimens_by_label[i]) - 1)
-                sample[i].append(self.specimens_by_label[i][idx])
-        return sample
 
 
 def get_label(x: pd.DataFrame) -> int:
@@ -152,7 +50,7 @@ def load_embedding_df(embedding_path: str) -> pd.DataFrame:
         The loaded data with columns for slide id, specimen id, and embedding
     """
     # load the pickled dict
-    with open(os.path.join(embedding_path), "rb") as f:
+    with open(embedding_path, "rb") as f:
         embeds = pickle.load(f)
 
     # extract data from dict for easy dataframe creation
@@ -245,13 +143,47 @@ def load_data(
     return df
 
 
-def load_tile_embeds(slide_id: str, fm: str) -> Dict[str, Tensor]:
-    with open(
-        os.path.join(
-            OUTPUT_DIR, fm, "tile_embeddings_sorted", f"{slide_id}.pkl"
-        ),
-        "rb",
-    ) as f:
+def load_pickled_embeds(embed_path: str) -> Dict[str, Tensor]:
+    """
+    Loads embeddings from a pickled file.
+
+    Parameters
+    ----------
+    embed_path : str
+        The path to the pickled embeddings
+
+    Returns
+    -------
+    Dict[str, Tensor]
+        The loaded embeddings
+    """
+    with open(embed_path, "rb") as f:
         embeds = pickle.load(f)
 
     return embeds
+
+
+def get_slides_by_specimen(slide_ids: List[str]) -> Dict[str, List[str]]:
+    """
+    Returns a dict mapping specimen ids to slide ids.
+
+    Parameters
+    ----------
+    slide_ids : List[str]
+        The slide ids
+
+    Returns
+    -------
+    Dict[str, List[str]]
+        The mapping of specimen ids to slide ids
+    """
+    slides_by_specimen = {}
+
+    for slide_id in slide_ids:
+        specimen_id = slide_id[:6]
+        if specimen_id not in slides_by_specimen:
+            slides_by_specimen[specimen_id] = [slide_id]
+        else:
+            slides_by_specimen[specimen_id].append(slide_id)
+
+    return slides_by_specimen

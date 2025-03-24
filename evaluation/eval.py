@@ -114,15 +114,6 @@ class Evaluator:
 
         Parameters
         ----------
-        foundation_model : str
-            The foundation model used in the experiment
-
-        aggregator : str
-            The aggregator used in the
-
-        classifier : str
-            The classifier used in the experiment
-
         fold_idx : int
             The index of the current fold being evaluated (0-indexed)
 

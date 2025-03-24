@@ -15,7 +15,8 @@ class GigaPath(FoundationModel):
         tiles_dir: str,
         tile_embeds_path: str,
         slide_embeds_path: str,
-        global_pool: bool,
+        global_pool: bool = True,
+        **kwargs,
     ) -> None:
         """
         Parameters

@@ -1,7 +1,76 @@
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 import numpy as np
 import pandas as pd
+
+from data_processing.data_utils import load_pickled_embeds
+
+
+def train_val_split_sk_clf(
+    val_fold: int,
+    specimens_by_fold: List[List[str]],
+    slides_by_specimen: Dict[str, List[str]],
+    labels_by_specimen: Dict[str, int],
+    embedding_path: str,
+) -> Dict[str, Union[np.ndarray, List[str]]]:
+    """
+    Split data into training and validation sets for a scikit-learn
+    classifier. This function is specifically for slide embeddings.
+
+    Parameters
+    ----------
+    val_fold : int
+        The fold to use for validation
+
+    specimens_by_fold : List[List[str]]
+        The list of specimens in each fold
+
+    slides_by_specimen : Dict[str, List[str]]
+        The slides associated with each specimen, with the specimen ids
+        as keys and the slide ids as values
+
+    labels_by_specimen : Dict[str, int]
+        The labels associated with each specimen, with the specimen ids
+        as keys and the labels as values
+
+    embedding_path : str
+        The path to the pickle file containing the slide embeddings
+
+    Returns
+    -------
+    Dict[str, Union[np.ndarray, List[str]]]
+        The training and validation sets of embeddings, labels, and
+        slide ids
+    """
+    train, val = train_val_split_slides(
+        val_fold=val_fold,
+        specimens_by_fold=specimens_by_fold,
+        slides_by_specimen=slides_by_specimen,
+    )
+
+    train_labels, val_labels = train_val_split_labels(
+        val_fold=val_fold,
+        labels_by_specimen=labels_by_specimen,
+        specimens_by_fold=specimens_by_fold,
+    )
+
+    slide_embeds = load_pickled_embeds(embedding_path)
+
+    X_train = np.stack([slide_embeds[slide] for slide in train])
+    X_val = np.stack([slide_embeds[slide] for slide in val])
+    y_train = np.array([train_labels[slide[:6]] for slide in train])
+    y_val = np.array([val_labels[slide[:6]] for slide in val])
+
+    fold_data = {
+        "X_train": X_train,
+        "y_train": y_train,
+        "X_val": X_val,
+        "y_val": y_val,
+        "train_ids": train,
+        "val_ids": val,
+    }
+
+    return fold_data
 
 
 def train_val_split(
@@ -67,7 +136,7 @@ def train_val_split_slides(
 ) -> Tuple[List[str], List[str]]:
     """
     Split slides into training and validation sets based on the
-    provided folds.
+    provided folds. Splits are at the slide level.
 
     Parameters
     ----------
@@ -108,8 +177,7 @@ def train_val_split_labels(
 ) -> Tuple[Dict[str, int], Dict[str, int]]:
     """
     Split labels into training and validation sets based on the
-    provided folds. Labels are on the specimen level, so we need to
-    expand them to the slide level.
+    provided folds. Labels are at the specimen level
 
     Parameters
     ----------

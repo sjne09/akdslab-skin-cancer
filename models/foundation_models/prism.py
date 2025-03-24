@@ -16,7 +16,11 @@ from models.foundation_models.fm import FoundationModel
 
 class PRISM(FoundationModel):
     def __init__(
-        self, tiles_dir: str, tile_embeds_path: str, slide_embeds_path: str
+        self,
+        tiles_dir: str,
+        tile_embeds_path: str,
+        slide_embeds_path: str,
+        **kwargs
     ) -> None:
         """
         Parameters

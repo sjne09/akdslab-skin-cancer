@@ -8,11 +8,16 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 
 from data_processing.datasets import TileEncodingDataset
+from data_processing.tile_embed_postproc import postproc_dict
 
 
 class FoundationModel(ABC):
     def __init__(
-        self, tiles_dir: str, tile_embeds_path: str, slide_embeds_path: str
+        self,
+        tiles_dir: str,
+        tile_embeds_path: str,
+        slide_embeds_path: str,
+        **kwargs,
     ) -> None:
         """
         Parameters
@@ -21,10 +26,12 @@ class FoundationModel(ABC):
             The path to the directory containing the image tiles
 
         tile_embeds_path : str
-            The path to the tile embeddings/where to save the tile embeddings
+            The path to the tile embeddings/where to save the tile
+            embeddings
 
         slide_embeds_path : str
-            The path to the slide embeddings/where to save the slide embeddings
+            The path to the slide embeddings/where to save the slide
+            embeddings
         """
         self._tile_encoder, self._transform = self._load_tile_encoder()
         self._slide_encoder = self._load_slide_encoder()
@@ -67,9 +74,10 @@ class FoundationModel(ABC):
         Returns
         -------
         Dict[str, torch.Tensor]
-            A dict with keys "tile_embeds" and "coords" and tensor values with
-            shapes (N, D) and (N, 2) where N is the number of tiles for the
-            slide and D is the output dimension from the model
+            A dict with keys "tile_embeds" and "coords" and tensor
+            values with shapes (N, D) and (N, 2) where N is the number
+            of tiles for the slide and D is the output dimension from
+            the model
         """
         loader = DataLoader(
             TileEncodingDataset(tile_paths, transform=self._transform),
@@ -110,7 +118,8 @@ class FoundationModel(ABC):
         Returns
         -------
         Dict[str, torch.Tensor]
-            A dict with keys as slide ids and values as the embedding tensors
+            A dict with keys as slide ids and values as the embedding
+            tensors
         """
         pass
 
@@ -120,12 +129,14 @@ class FoundationModel(ABC):
         batch_size: int = 128,
     ) -> None:
         """
-        Create tile embeddings for each slide in the provided tiles directory
-        and save to disk. Embeddings will be saved as pickle files. Each
-        pickle file will contain the collated tile embeddings for a single
-        slide in a dict with keys "tile_embeds" and "coords" and tensor
-        values with shapes (N, D) and (N, 2) where N is the number of tiles
-        for the slide and D is the output dimension from the model
+        Create tile embeddings for each slide in the provided tiles
+        directory and save to disk. Embeddings will be saved as pickle
+        files. Each pickle file will contain the collated tile
+        embeddings for a single slide in a dict with keys
+        "tile_embeds", "coords", and "pos" and tensor values with
+        shapes (N, D), (N, 2), and (N, 2) where N is the number of
+        tiles for the slide and D is the output dimension from the
+        model.
 
         Parameters
         ----------
@@ -150,14 +161,12 @@ class FoundationModel(ABC):
                     # device
                     # model return includes tensor containing embeddings and
                     # tensor containing tile coords
-                    embeds = (
-                        dirname,
-                        self._run_tile_encoder_inference(
-                            tiles,
-                            batch_size,
-                            device,
-                        ),
+                    embeds = self._run_tile_encoder_inference(
+                        tiles,
+                        batch_size,
+                        device,
                     )
+                    embeds = postproc_dict(embeds)
 
                     # pickle the embeddings
                     with open(
@@ -169,20 +178,20 @@ class FoundationModel(ABC):
                         ),
                         "wb",
                     ) as f:
-                        pickle.dump(embeds[1], f)
+                        pickle.dump(embeds, f)
 
     def create_slide_embeds(self, fname: str, device: torch.device) -> None:
         """
-        Creates slide embeddings and save to disk. Embeddings will be saved as
-        a pickle file. The pickle file will contain the collated slide
-        embeddings for all slides in a dict with keys as slide ids and
-        values as the embedding tensors.
+        Creates slide embeddings and save to disk. Embeddings will be
+        saved as a pickle file. The pickle file will contain the
+        collated slide embeddings for all slides in a dict with keys
+        as slide ids and values as the embedding tensors.
 
         Parameters
         ----------
         fname : str
-            The filename to save the slide embeddings to in the slide embeds
-            path
+            The filename to save the slide embeddings to in the slide
+            embeds path
 
         device : torch.device
             The device to use
@@ -219,17 +228,18 @@ class FoundationModel(ABC):
         self, fname: str, z_norm: bool = False
     ) -> None:
         """
-        Creates slide embeddings using the global pooling strategy (i.e., by
-        averaging all of the tile embeddings) and saves to disk. Embeddings
-        will be saved as a pickle file. The pickle file will contain the
-        collated slide embeddings for all slides in a dict with keys as slide
-        ids and values as the embedding tensors.
+        Creates slide embeddings using the global pooling strategy
+        (i.e., by averaging all of the tile embeddings) and saves to
+        disk. Embeddings will be saved as a pickle file. The pickle
+        file will contain the collated slide embeddings for all slides
+        in a dict with keys as slide ids and values as the embedding
+        tensors.
 
         Parameters
         ----------
         fname : str
-            The filename to save the slide embeddings to in the slide embeds
-            path
+            The filename to save the slide embeddings to in the slide
+            embeds path
 
         z_norm : bool
             Whether to z-normalize the slide embeddings

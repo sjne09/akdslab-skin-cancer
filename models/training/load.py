@@ -18,6 +18,41 @@ def get_loaders(
     val_dataset_class: Union[Type[Dataset], partial],
     collate_fn: Callable[[list], dict],
 ) -> Tuple[DataLoader, DataLoader]:
+    """
+    Returns training and validation dataloaders for a given fold.
+
+    Parameters
+    ----------
+    val_fold : int
+        The fold to use for validation
+
+    specimens_by_fold : List[List[str]]
+        The list of specimens in each fold
+
+    slides_by_specimen : Dict[str, List[str]]
+        The slides associated with each specimen, with the specimen ids
+        as keys and the slide ids as values
+
+    labels_by_specimen : Dict[str, int]
+        The labels associated with each specimen, with the specimen ids
+        as keys and the labels as values
+
+    train_dataset_class : Union[Type[Dataset], partial]
+        The class to use for the training dataset. Can be a partial
+        function with arguments
+
+    val_dataset_class : Union[Type[Dataset], partial]
+        The class to use for the validation dataset. Can be a partial
+        function with arguments
+
+    collate_fn : Callable[[list], dict]
+        The function to use for collating the data
+
+    Returns
+    -------
+    Tuple[DataLoader, DataLoader]
+        The training and validation dataloaders
+    """
     train, val = train_val_split_slides(
         val_fold=val_fold,
         specimens_by_fold=specimens_by_fold,
