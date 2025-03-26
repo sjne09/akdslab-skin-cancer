@@ -26,7 +26,8 @@ class Trainer:
         Parameters
         ----------
         model_name_pattern : str
-            The pattern for the model name
+            The pattern for the model name - should be a path with
+            placeholders for key information
 
         evaluator : Evaluator
             The evaluator to use for evaluation

@@ -71,13 +71,12 @@ def main() -> None:
     )  # not a joinablequeue to avoid processes being killed prematurely
     num_threads = 12
 
-    src_root = os.path.join(DATA_DIR, "data/slides")
-    dest_root = os.path.join(DATA_DIR, "data/tiles")
+    src_root = os.path.join(DATA_DIR, "slides")
+    dest_root = os.path.join(DATA_DIR, "tiles")
 
     # add all the filenames to the queue + sentinels
-    for dname, _, fnames in os.walk(src_root):
-        for fname in fnames:
-            q.put(os.path.join(dname, fname))
+    for fname in os.listdir(src_root):
+        q.put(os.path.join(src_root, fname))
     for _ in range(num_threads):
         q.put("DONE")
 

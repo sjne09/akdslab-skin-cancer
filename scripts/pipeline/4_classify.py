@@ -22,8 +22,8 @@ from models import MLP
 from models.training.load import get_loaders
 from models.training.train import Trainer
 
-DATA_DIR = os.getenv("DATA_DIR")
-OUTPUT_DIR = os.getenv("OUTPUT_DIR")
+DATA_DIR = os.environ["DATA_DIR"]
+OUTPUT_DIR = os.environ["OUTPUT_DIR"]
 EPOCHS = 30
 BATCH_SIZE = 16
 NUM_LABELS = len(Label)
@@ -77,7 +77,7 @@ def crossval_mlp(
     )
 
     trainer = Trainer(
-        model_name_pattern=model_name,
+        model_name_pattern=os.path.join(OUTPUT_DIR, model_name),
         evaluator=evaluator,
         device=device,
         epochs=EPOCHS,
@@ -88,7 +88,7 @@ def crossval_mlp(
         label_key="label",
     )
 
-    for i in data.n_folds:
+    for i in range(data.n_folds):
         print(f"--------------------FOLD    {i + 1}--------------------")
         # get dataloaders and embed dims for loaded embeddings
         train_loader, val_loader = get_loaders(
@@ -181,7 +181,7 @@ def crossval_sklearn(
         onehot_labels=data.onehot_labels,
     )
 
-    for i in data.n_folds:
+    for i in range(data.n_folds):
         # fit the classifier on the train data and extract probs
         split = train_val_split_sk_clf(
             val_fold=i,
@@ -194,7 +194,7 @@ def crossval_sklearn(
         clf.fit(split["X_train"], split["y_train"])
         probs = clf.predict_proba(split["X_val"])
         model_data = {
-            "ids": split["val_slides"],
+            "ids": split["val_ids"],
             "labels": split["y_val"],
             "probs": probs,
         }
@@ -223,9 +223,7 @@ def main() -> None:
 
     slide_ids = [
         os.path.splitext(os.path.basename(path))[0]
-        for path in os.listdir(
-            os.path.join(OUTPUT_DIR, "uni/tile_embeddings_sorted")
-        )
+        for path in os.listdir(os.path.join(OUTPUT_DIR, "uni/tile_embeddings"))
     ]
     slides_by_specimen = get_slides_by_specimen(slide_ids)
 
@@ -238,7 +236,10 @@ def main() -> None:
 
     for fm, aggs in slide_embeds.items():
         for agg in aggs:
-            embedding_path = f"{OUTPUT_DIR}/{fm}_slide_embeds_{agg}.pkl"
+            embedding_path = os.path.join(
+                OUTPUT_DIR,
+                f"{fm}/slide_embeddings/{fm}_slide_embeds_{agg}.pkl",
+            )
 
             crossval_mlp(
                 data=data,
@@ -272,3 +273,7 @@ def main() -> None:
                 classifier="lr",
                 embedding_path=embedding_path,
             )
+
+
+if __name__ == "__main__":
+    main()

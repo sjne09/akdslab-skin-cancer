@@ -1,7 +1,7 @@
 import gc
 import os
 from functools import partial
-from typing import Type
+from typing import Type, Union
 
 import torch
 
@@ -17,14 +17,19 @@ DATA_DIR = os.environ["DATA_DIR"]
 OUTPUT_DIR = os.environ["OUTPUT_DIR"]
 
 
-def initialize_fm(fm: Type[FoundationModel]) -> FoundationModel:
+def initialize_fm(
+    fm: Union[Type[FoundationModel], partial], name: str
+) -> FoundationModel:
     """
     Initializes a FoundationModel with the appropriate paths.
 
     Parameters
     ----------
-    fm : Type[FoundationModel]
+    fm : Union[Type[FoundationModel], partial]
         The FoundationModel class to initialize
+
+    name : str
+        The name of the FoundationModel
 
     Returns
     -------
@@ -33,10 +38,10 @@ def initialize_fm(fm: Type[FoundationModel]) -> FoundationModel:
     """
     # create the output directories if necessary
     tile_embeds_path = os.path.join(
-        OUTPUT_DIR, f"{fm.__name__.lower()}/tile_embeddings"
+        OUTPUT_DIR, f"{name.lower()}/tile_embeddings"
     )
     slide_embeds_path = os.path.join(
-        OUTPUT_DIR, f"{fm.__name__.lower()}/slide_embeddings"
+        OUTPUT_DIR, f"{name.lower()}/slide_embeddings"
     )
     try:
         os.makedirs(tile_embeds_path)
@@ -71,8 +76,9 @@ def main() -> None:
     fms = slide_embed_names.keys()
 
     for fm in fms:
-        print(f"Running {fm.__name__}")
-        model = initialize_fm(fm)
+        name = fm.func.__name__ if isinstance(fm, partial) else fm.__name__
+        print(f"Running {name}")
+        model = initialize_fm(fm, name)
 
         # run tile inference
         model.create_tile_embeds(device)
@@ -80,7 +86,7 @@ def main() -> None:
 
         # run GAP slide inference
         model.create_pooled_slide_embeds(
-            fname=f"{fm.__name__.lower()}_slide_embeds_GAP", device=device
+            fname=f"{name.lower()}_slide_embeds_GAP"
         )
         print("Finished GAP slide embeddings")
 
@@ -88,8 +94,7 @@ def main() -> None:
         try:
             model.create_slide_embeds(
                 fname=(
-                    f"{fm.__name__.lower()}_slide_embeds_"
-                    f"{slide_embed_names[fm]}"
+                    f"{name.lower()}_slide_embeds_" f"{slide_embed_names[fm]}"
                 ),
                 device=device,
             )
@@ -101,7 +106,7 @@ def main() -> None:
         del model
         gc.collect()
         torch.cuda.empty_cache()
-        print(f"Finished {fm.__name__}")
+        print(f"Finished {name}")
         print()
 
     print("Finished all models")

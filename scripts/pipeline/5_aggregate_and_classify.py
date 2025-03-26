@@ -15,8 +15,8 @@ from models import MILClassifier
 from models.training.load import get_loaders
 from models.training.train import Trainer
 
-DATA_DIR = os.getenv("DATA_DIR")
-OUTPUT_DIR = os.getenv("OUTPUT_DIR")
+DATA_DIR = os.environ["DATA_DIR"]
+OUTPUT_DIR = os.environ["OUTPUT_DIR"]
 EPOCHS = 30
 BATCH_SIZE = 16
 NUM_LABELS = len(Label)
@@ -62,7 +62,8 @@ def crossval(
     aggregator = "gabmil" if gated else "abmil"
     save_directory = "gated" if gated else "ungated"
     model_name = (
-        "chkpts/{foundation_model}-{aggregator}-{heads}_heads-fold-{i}.pt"
+        "chkpts/{foundation_model}/"
+        "{foundation_model}-{aggregator}-{heads}_heads-fold-{i}.pt"
     )
     exp_name = (
         f"{foundation_model}/abmil/{save_directory}/"
@@ -153,9 +154,7 @@ def main() -> None:
 
     slide_ids = [
         os.path.splitext(os.path.basename(path))[0]
-        for path in os.listdir(
-            os.path.join(OUTPUT_DIR, "uni/tile_embeddings_sorted")
-        )
+        for path in os.listdir(os.path.join(OUTPUT_DIR, "uni/tile_embeddings"))
     ]
     slides_by_specimen = get_slides_by_specimen(slide_ids)
 
@@ -170,9 +169,8 @@ def main() -> None:
             gated = gates[exp_idx]
             heads = head_counts[exp_idx]
 
-            embedding_dir = (
-                "/opt/gpudata/skin-cancer/outputs/"
-                f"{foundation_model}/tile_embeddings_sorted"
+            embedding_dir = os.path.join(
+                OUTPUT_DIR, f"{foundation_model}/tile_embeddings"
             )
 
             crossval(

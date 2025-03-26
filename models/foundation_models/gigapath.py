@@ -104,16 +104,16 @@ class GigaPath(FoundationModel):
 
             # run inference
             with torch.autocast("cuda", dtype=torch.float16):
-                slide_embeds = self._slide_encoder(
+                slide_embed = self._slide_encoder(
                     tile_embeds.to(device),
                     coords.to(device),
                     all_layer_embed=True,
                 )
                 outputs = {
-                    "layer_{}_embed".format(i): slide_embeds[i].detach().cpu()
-                    for i in range(len(slide_embeds))
+                    "layer_{}_embed".format(i): slide_embed[i].detach().cpu()
+                    for i in range(len(slide_embed))
                 }
-                outputs["last_layer_embed"] = slide_embeds[-1].detach().cpu()
+                outputs["last_layer_embed"] = slide_embed[-1].detach().cpu()
 
             # save only the final embedding
             slide_embeds[id] = outputs["last_layer_embed"]
