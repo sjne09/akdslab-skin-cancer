@@ -136,7 +136,7 @@ def plot_image(
     tile_coords : Optional[List[Iterable[int]]]
         A list of (x, y) tile coords corresponding to tiles to visualize
 
-    tile_weights : Optional[List[float]]
+    tile_weights : Optional[List[float]]is th
         Weights corresponding to each tile in tile_coords (must be in the
         same order as tile_coords)
 
@@ -184,7 +184,7 @@ def plot_image(
                     bbox_to_anchor=(1.2, 0.6),
                 )
             else:
-                plt.colorbar(pc, ax)
+                plt.colorbar(pc, ax=ax)
         else:
             pc = collections.PatchCollection(
                 rects, match_original=True, alpha=0.5, edgecolor="black"
