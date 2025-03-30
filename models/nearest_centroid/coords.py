@@ -1,7 +1,7 @@
 import os
 from typing import Dict, List, Tuple
 
-from utils.slide_utils import load_slide
+from data_processing.slide_utils import load_slide
 
 
 def map_coords(

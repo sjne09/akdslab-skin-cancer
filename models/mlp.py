@@ -6,7 +6,7 @@ from torch import nn
 
 class MLP(nn.Module):
     """
-    Basic MLP with one hidden layer using the GELU nonlinearity.
+    Basic MLP using the GELU nonlinearity.
     """
 
     def __init__(

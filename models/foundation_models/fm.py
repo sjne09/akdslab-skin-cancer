@@ -224,9 +224,7 @@ class FoundationModel(ABC):
                 emb = pickle.load(f)
                 yield (name, emb)
 
-    def create_pooled_slide_embeds(
-        self, fname: str, z_norm: bool = False
-    ) -> None:
+    def create_pooled_slide_embeds(self, fname: str) -> None:
         """
         Creates slide embeddings using the global pooling strategy
         (i.e., by averaging all of the tile embeddings) and saves to
@@ -240,17 +238,10 @@ class FoundationModel(ABC):
         fname : str
             The filename to save the slide embeddings to in the slide
             embeds path
-
-        z_norm : bool
-            Whether to z-normalize the slide embeddings
         """
         slide_embeds = {}
         for name, emb in self.load_tile_embeds():
             slide_embeds[name] = emb["tile_embeds"].mean(dim=0)
-            if z_norm:
-                slide_embeds[name][emb] = (
-                    slide_embeds[name][emb] - slide_embeds[name][emb].mean()
-                ) / slide_embeds[name][emb].std()
 
         with open(
             os.path.join(self._slide_embeds_path, fname + ".pkl"),

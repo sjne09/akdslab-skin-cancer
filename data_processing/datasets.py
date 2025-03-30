@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from PIL import Image
 from torch.nn import functional as F
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset
 from torchvision import transforms
 
 from data_processing.tile_embed_postproc import add_positions
@@ -185,44 +185,6 @@ class TileEncodingDataset(Dataset):
         }
 
 
-class TileLoaderDataset(Dataset):
-    def __init__(
-        self,
-        tile_dirs: List[str],
-        labels: Dict[str, int],
-        batch_size: int,
-        random_samples: int,
-        transform: transforms.Compose,
-    ):
-        self.tile_dirs = tile_dirs
-        self.labels = labels
-        self.batch_size = batch_size
-        self.random_samples = random_samples
-        self.transform = transform
-
-    def __len__(self):
-        return len(self.tile_dirs)
-
-    def __getitem__(self, idx):
-        image_paths = [
-            os.path.join(self.tile_dirs[idx], img)
-            for img in os.listdir(self.tile_dirs[idx])
-            if img.endswith(".png")
-        ]
-        dataset = TileEncodingDataset(image_paths, self.transform)
-        loader = DataLoader(
-            dataset,
-            batch_size=self.batch_size,
-            sampler=SubsetRandomSampler(
-                list(range(len(dataset))), self.random_samples
-            ),
-        )
-        label = torch.tensor(
-            [self.labels[os.path.basename(self.tile_dirs[idx])[:6]]]
-        )
-        return (loader, label)
-
-
 class EnsembleDataset(Dataset):
     """
     An ensemble dataset for input into an ensemble model. Accepts
@@ -305,59 +267,6 @@ class EnsembleDataset(Dataset):
         assert all(i == ids[0] for i in ids)
         assert all(label == labels[0] for label in labels)
         return tile_items, slide_items
-
-
-class ResNetDataset(Dataset):
-    """
-    Taken from prov-gigapath pipeline.
-
-    Dataset for input into tile encoders. Retains image coordinates that are
-    encoded in tile image file names.
-    """
-
-    def __init__(
-        self,
-        tile_dir: str,
-        slide_ids: List[str],
-        labels: Dict[str, int],
-        transform: transforms.Compose = None,
-    ) -> None:
-        self.tile_dir = tile_dir
-        self.slide_ids = slide_ids
-        self.labels = labels
-        self.transform = transform
-
-    def __len__(self) -> int:
-        return len(self.slide_ids)
-
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
-        slide_id = self.slide_ids[idx]
-        specimen_id = slide_id[:6]
-        slide_dir = os.path.join(self.tile_dir, slide_id)
-
-        slide_data = []
-        for tile in os.listdir(slide_dir):
-            if tile.endswith(".png"):
-                img_path = os.path.join(slide_dir, tile)
-                img_name = os.path.basename(img_path)
-                # get x, y coordinates from the image name
-                x, y = img_name.split(".png")[0].split("_")
-                x, y = int(x.replace("x", "")), int(y.replace("y", ""))
-                # load the image
-                with open(img_path, "rb") as f:
-                    img = Image.open(f).convert("RGB")
-                    if self.transform:
-                        img = self.transform(img)
-
-                slide_data.append(
-                    {
-                        "img": torch.from_numpy(np.array(img)),
-                        "coords": torch.from_numpy(np.array([x, y])).float(),
-                    }
-                )
-        collated_tiles = collate_tiles(slide_data)
-        collated_tiles["label"] = torch.tensor([self.labels[specimen_id]])
-        return collated_tiles
 
 
 class SubsetRandomSampler(torch.utils.data.Sampler):

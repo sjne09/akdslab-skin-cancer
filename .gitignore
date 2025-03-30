@@ -1,9 +1,3 @@
 *.pyc
 *.pyo
 .vscode
-
-# data files
-data
-
-# tile embeddings
-outputs/tile_embeddings

@@ -2,10 +2,13 @@ import os
 import pickle
 from enum import IntEnum
 from operator import itemgetter
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, List, Literal, Optional, Set, Tuple, Type, Union
 
+import matplotlib.pyplot as plt
 import torch
 from shapely import Polygon, contains, intersects
+
+from data_processing.slide_utils import plot_image
 
 from .coords import map_coords
 from .roi import (
@@ -17,12 +20,44 @@ from .roi import (
 
 
 class NearestCentroid:
+    """
+    Nearest centroid classifier for tile embeddings. The model is fit
+    on tile embeddings and the centroids are calculated using
+    global average pooling (GAP) on the tile embeddings for each
+    classification label. The model can then be used to predict the
+    classification of new tile embeddings by calculating the distance
+    between the new tile embeddings and the centroids. The model
+    supports different modes for calculating the distance between
+    the new tile embeddings and the centroids, including dot product,
+    modified dot product, euclidean distance, and cosine similarity.
+    """
+
     def __init__(
         self,
-        labels_enum: IntEnum,
+        labels_enum: Type[IntEnum],
         centroids: Optional[Union[torch.Tensor, os.PathLike, str]] = None,
         mode: str = "intersects",
     ) -> None:
+        """
+        Parameters
+        ----------
+        labels_enum : Type[IntEnum]
+            An enum containing the possible classification labels
+
+        centroids : Optional[Union[torch.Tensor, os.PathLike, str]]
+            The path to the pickled centroids or a tensor containing the
+            centroids. If None, the model must be fit before inference.
+            If a path is provided, the centroids will be loaded from
+            the path.
+
+        mode : str
+            The mode to use for determining centroid distance/similarity.
+            Options are:
+                "intersects": the tiles must intersect with the
+                    polygons for the centroids
+                "contains": the tiles must be contained within the
+                    polygons for the centroids
+        """
         if mode not in {"intersects", "contains"}:
             raise ValueError("mode must be either 'intersects' or 'contains'")
         self.labels = labels_enum
@@ -113,7 +148,11 @@ class NearestCentroid:
         self.roi_tiles = roi_tiles
 
     def predict(
-        self, X: torch.Tensor, mode: str = "dot_product"
+        self,
+        X: torch.Tensor,
+        mode: Literal[
+            "dot_product", "modified_dot", "euclidean", "cosine"
+        ] = "dot_product",
     ) -> torch.Tensor:
         """
         Returns predictions as logits based on the selected mode.
@@ -180,6 +219,57 @@ class NearestCentroid:
         """
         with open(path, "rb") as f:
             self.centroids = pickle.load(f)
+
+    def generate_annotation(
+        self,
+        slide_img_path: str,
+        slide_embeds: Dict[str, Dict[str, torch.Tensor]],
+        ax: plt.Axes,
+        pred_mode: Literal[
+            "dot_product", "modified_dot", "euclidean", "cosine"
+        ] = "dot_product",
+    ) -> None:
+        """
+        Generate an annotation for a slide image using model preds.
+
+        Parameters
+        ----------
+        slide_img_path : str
+            The path to the slide image
+
+        slide_embeds : Dict[str, Dict[str, torch.Tensor]]
+            A dict containing the slide embeddings and tile coords.
+            The dict should contain the keys "tile_embeds" and "coords"
+            with the corresponding values as tensors
+
+        ax : plt.Axes
+            The axes to plot the image on
+
+        pred_mode : str
+            The mode to use for determining centroid distance/
+            similarity
+            Options are:
+                "dot_product": the raw dot products of the rows of X
+                    and the centroids
+                "modified_dot": the negative absolute value of the dot
+                    products of the rows of X and the centroids less
+                    the squared of the centroids
+                "euclidean": the euclidean distance between the rows of
+                    X and the centroids
+                "cosine": the cosine similarity between rows of X and
+                    the centroids
+        """
+        pred_func = torch.argmin if pred_mode == "euclidean" else torch.argmax
+        preds = self.predict(
+            slide_embeds["tile_embeds"].float(), mode=pred_mode
+        )
+        plot_image(
+            fpath=slide_img_path,
+            ax=ax,
+            tile_coords=slide_embeds["coords"],
+            tile_weights=pred_func(preds, dim=-1),
+            weight_labels={label.name: label.value for label in self.labels},
+        )
 
     def _roi_tiles_by_slide(
         self,
