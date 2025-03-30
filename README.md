@@ -31,6 +31,8 @@ In order to utilize most of the code in this repo, you must have been approved f
     pip install -e .
     ```
 
+5. Update `.env` with data and output directory paths
+
 ## Running
 
 To rerun our experiments, see the scripts in `scripts.pipeline`.
