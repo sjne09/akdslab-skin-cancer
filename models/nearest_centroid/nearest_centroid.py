@@ -10,8 +10,8 @@ from shapely import Polygon, contains, intersects
 
 from data_processing.slide_utils import plot_image
 
-from .coords import map_coords
-from .roi import (
+from .utils.coords import map_coords
+from .utils.roi import (
     extract_relevant_tiles,
     get_class_polygons,
     get_roi_embeds,
