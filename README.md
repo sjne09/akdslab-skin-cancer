@@ -1,5 +1,7 @@
 # Improved Diagnosis of Non-Melanoma Skin Cancer in Resource-Limited Settings
 
+https://doi.org/10.1158/1055-9965.EPI-25-0132
+
 Spencer Ellis*, Steven Song*, Derek Reiman*, Xuan Hui, Renyu Zhang, Mohammad H. Shahriar, Maria Argos, John A. Baron, Mohammed Kamal, Christopher R. Shea, Robert L. Grossman†, Aly A. Khan†, and Habibul Ahsan†
 
 \* Equal Contribution
